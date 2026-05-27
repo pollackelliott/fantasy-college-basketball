@@ -1,0 +1,1286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Sickos College Basketball</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=Noto+Sans+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ── LIGHT MODE (default) ── */
+  :root {
+    --page-bg:  #ddb87a;
+    --bg:       #e8c98e;
+    --surface:  #f0d9a8;
+    --surface2: #f5e4be;
+    --border:   #c9a060;
+    --hdr:      #2a1f14;
+    --hdr-fg:   #f5e8d0;
+    --accent:   #c45508;
+    --accent2:  #a03800;
+    --text:     #2a1c08;
+    --muted:    #8a6535;
+    --green:    #2a6e2a;
+    --red:      #b83232;
+    --font-mono: 'Noto Sans Mono', monospace;
+    --font-body: 'Noto Sans', sans-serif;
+  }
+
+  /* ── DARK MODE ── */
+  body.dark {
+    --page-bg:  #1a1208;
+    --bg:       #211709;
+    --surface:  #2a1f0e;
+    --surface2: #342812;
+    --border:   #4a3520;
+    --hdr:      #120d04;
+    --hdr-fg:   #f0e0c0;
+    --accent:   #d46420;
+    --accent2:  #ff8040;
+    --text:     #f0e0c0;
+    --muted:    #9a7550;
+    --green:    #5aaa5a;
+    --red:      #e05555;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    background: var(--page-bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    min-height: 100dvh;
+    max-width: 480px;
+    margin: 0 auto;
+    padding-bottom: 80px;
+    transition: background 0.3s, color 0.3s;
+  }
+
+  /* subtle wood grain — fades out in dark mode */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      91deg, transparent 0px, transparent 42px,
+      rgba(0,0,0,0.028) 42px, rgba(0,0,0,0.028) 44px,
+      transparent 44px, transparent 80px,
+      rgba(255,255,255,0.04) 80px, rgba(255,255,255,0.04) 82px
+    );
+    pointer-events: none; z-index: 0;
+    opacity: 1; transition: opacity 0.3s;
+  }
+  body.dark::before { opacity: 0; }
+
+  /* ── HEADER ── */
+  header {
+    position: sticky; top: 0; z-index: 100;
+    background: var(--hdr);
+    padding: 14px 16px 0;
+    transition: background 0.3s;
+  }
+
+  .header-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+
+  .logo { display: flex; flex-direction: column; }
+  .logo-main { font-size: 19px; font-weight: 900; color: var(--hdr-fg); letter-spacing: 0.1px; line-height: 1.1; }
+  .logo-sub { font-size: 8px; font-weight: 500; color: var(--hdr-fg); opacity: 0.5; letter-spacing: 2px; text-transform: uppercase; margin-top: 2px; }
+
+  .header-right { display: flex; align-items: center; gap: 8px; }
+
+  .team-pill {
+    display: flex; align-items: center; gap: 6px;
+    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 20px; padding: 5px 12px;
+    font-size: 12px; font-weight: 600; color: var(--hdr-fg);
+    cursor: pointer; transition: background 0.15s;
+  }
+  .team-pill:hover { background: rgba(255,255,255,0.17); }
+  .team-pill-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+
+  .mode-btn {
+    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 20px; padding: 5px 9px;
+    font-size: 13px; color: var(--hdr-fg);
+    cursor: pointer; font-family: var(--font-body);
+    transition: background 0.15s; line-height: 1;
+  }
+  .mode-btn:hover { background: rgba(255,255,255,0.17); }
+
+  .tabs { display: flex; }
+  .tab {
+    flex: 1; padding: 10px 4px; text-align: center;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.8px;
+    text-transform: uppercase; color: rgba(245,232,208,0.4);
+    cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s;
+  }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── DATE NAV ── */
+  .date-nav {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 16px; border-bottom: 1px solid var(--border);
+    background: var(--surface); transition: background 0.3s;
+  }
+  .date-arrow {
+    width: 32px; height: 32px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--bg);
+    color: var(--text); font-size: 17px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; transition: all 0.15s; user-select: none;
+  }
+  .date-arrow:hover:not([disabled]) { border-color: var(--accent); color: var(--accent); }
+  .date-arrow[disabled] { opacity: 0.25; cursor: default; pointer-events: none; }
+  .date-display { flex: 1; text-align: center; cursor: pointer; }
+  .date-main { font-size: 15px; font-weight: 700; color: var(--text); transition: color 0.15s; }
+  .date-display:hover .date-main { color: var(--accent); }
+  .date-hint { font-family: var(--font-mono); font-size: 9px; color: var(--muted); letter-spacing: 0.6px; text-transform: uppercase; margin-top: 1px; }
+  #date-picker-input { position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px; }
+
+  /* ── MAIN ── */
+  main { padding: 16px; position: relative; z-index: 1; }
+
+  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .section-title { font-size: 16px; font-weight: 800; color: var(--text); text-transform: uppercase; letter-spacing: 0.5px; }
+  .badge { font-family: var(--font-mono); font-size: 11px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 3px 8px; color: var(--muted); }
+
+  /* ── TEAM CHIPS ── */
+  .team-selector { display: flex; gap: 7px; margin-bottom: 14px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+  .team-selector::-webkit-scrollbar { display: none; }
+  .team-chip { flex-shrink: 0; padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; border: 1.5px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+  .team-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* ── TOTALS BAR ── */
+  .totals-bar {
+    background: var(--hdr); border-radius: 10px;
+    padding: 12px 16px; margin-bottom: 14px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .totals-label { font-size: 11px; color: var(--hdr-fg); opacity: 0.6; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .totals-sub { font-family: var(--font-mono); font-size: 9px; color: var(--hdr-fg); opacity: 0.4; margin-top: 2px; }
+  .totals-val { font-size: 30px; font-weight: 900; color: var(--accent); line-height: 1; }
+
+  /* ── GAME CARDS ── */
+  .game-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 10px; overflow: hidden; }
+  .game-card-header { padding: 8px 14px; background: var(--surface2); border-bottom: 1px solid var(--border); }
+  .game-matchup { font-size: 12px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+  .player-row { display: flex; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); gap: 12px; }
+  .player-row:last-child { border-bottom: none; }
+  .player-info { flex: 1; min-width: 0; }
+  .player-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .player-school { font-size: 11px; color: var(--muted); margin-top: 2px; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+
+  .player-status { font-size: 9px; font-weight: 700; letter-spacing: 0.5px; padding: 2px 7px; border-radius: 4px; text-transform: uppercase; white-space: nowrap; flex-shrink: 0; }
+  .status-starter  { background: rgba(42,110,42,0.15); color: var(--green); }
+  .status-bench    { background: rgba(196,85,8,0.15);  color: var(--accent); }
+  .status-dnp      { background: rgba(184,50,50,0.12); color: var(--red); }
+  .status-inactive { background: rgba(138,101,53,0.15); color: var(--muted); }
+
+  .pra-block { text-align: right; min-width: 52px; flex-shrink: 0; }
+  .pra-big { font-size: 28px; font-weight: 900; line-height: 1; color: var(--text); }
+  .pra-hot  { color: var(--accent); }
+  .pra-fire { color: var(--accent2); }
+  .pra-dnp-label { font-family: var(--font-mono); font-size: 12px; color: var(--red); line-height: 2.5; }
+  .pra-breakdown { font-family: var(--font-mono); font-size: 9px; color: var(--muted); margin-top: 2px; }
+
+  /* ── STANDINGS ── */
+  .standings-row { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; cursor: pointer; transition: background 0.12s; }
+  .standings-row:active { background: var(--surface2); }
+  .standings-row.is-me { border-color: var(--accent); background: rgba(196,85,8,0.06); }
+  .rank { font-size: 22px; font-weight: 900; min-width: 32px; color: var(--muted); line-height: 1; }
+  .rank.top3 { color: var(--accent); }
+  .standings-row.is-me .rank { color: var(--accent); }
+  .standing-name { flex: 1; font-size: 14px; font-weight: 600; color: var(--text); pointer-events: none; }
+  .standing-total { font-size: 19px; font-weight: 800; color: var(--text); line-height: 1; }
+  .standing-behind { font-family: var(--font-mono); font-size: 10px; color: var(--red); margin-top: 2px; }
+  .standing-leader { font-family: var(--font-mono); font-size: 10px; color: var(--green); margin-top: 2px; }
+
+  /* ── STATS ── */
+  .filter-row { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
+  .filter-label { font-family: var(--font-mono); font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; white-space: nowrap; }
+  .filter-select { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--font-body); font-size: 13px; padding: 8px 10px; appearance: none; -webkit-appearance: none; }
+  .sort-btn { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--muted); font-size: 12px; font-weight: 600; padding: 7px 12px; cursor: pointer; white-space: nowrap; font-family: var(--font-body); transition: all 0.15s; }
+  .sort-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .stats-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 11px 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; cursor: pointer; transition: background 0.12s; }
+  .stats-card:active { background: var(--surface2); }
+  .stats-card.is-my-player { border-left: 3px solid var(--accent); }
+  .stat-player-info { flex: 1; min-width: 0; pointer-events: none; }
+  .stat-player-name { font-size: 13px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stat-player-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .stat-nums { display: flex; gap: 12px; flex-shrink: 0; pointer-events: none; }
+  .stat-col { text-align: center; }
+  .stat-val { font-size: 16px; font-weight: 800; line-height: 1; color: var(--text); }
+  .stat-val.sm { font-size: 14px; }
+  .stat-key { font-family: var(--font-mono); font-size: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
+
+  /* Segmented control */
+  .seg-control { display: flex; background: var(--surface); border: 1.5px solid var(--border); border-radius: 10px; padding: 3px; margin-bottom: 12px; gap: 2px; }
+  .seg-btn { flex: 1; padding: 7px 4px; text-align: center; font-size: 12px; font-weight: 700; color: var(--muted); border-radius: 7px; cursor: pointer; transition: all 0.15s; border: none; background: none; font-family: var(--font-body); }
+  .seg-btn.active { background: var(--accent); color: #fff; }
+  .tap-hint { font-family: var(--font-mono); font-size: 9px; color: var(--muted); margin-top: 3px; }
+
+  /* ── SCHOOL NAMEPLATE ── */
+  .school-tag { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.3px; padding: 1px 6px; border-radius: 3px; background: var(--surface2); color: var(--muted); vertical-align: middle; line-height: 1.7; }
+
+  /* ── GAME LOG ── */
+  .gl-row { display: flex; align-items: center; padding: 9px 14px; border-bottom: 1px solid var(--border); gap: 10px; }
+  .gl-row:last-child { border-bottom: none; }
+  .gl-row.gl-dnp { opacity: 0.5; }
+  .gl-date { font-family: var(--font-mono); font-size: 11px; color: var(--muted); min-width: 52px; flex-shrink: 0; }
+  .gl-mid { flex: 1; min-width: 0; }
+  .gl-opp { font-size: 13px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .gl-meta { display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+  .gl-breakdown { font-family: var(--font-mono); font-size: 9px; color: var(--muted); }
+  .gl-pra { font-size: 22px; font-weight: 900; line-height: 1; min-width: 36px; text-align: right; flex-shrink: 0; color: var(--text); }
+  .gl-pra.pra-hot  { color: var(--accent); }
+  .gl-pra.pra-fire { color: var(--accent2); }
+  .gl-pra.pra-dnp  { font-family: var(--font-mono); font-size: 12px; color: var(--red); line-height: 2.5; }
+
+  /* ── BACK BTN ── */
+  .back-btn { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--accent); cursor: pointer; margin-bottom: 16px; background: none; border: none; padding: 0; font-family: var(--font-body); }
+
+  /* ── EMPTY / LOADING ── */
+  .empty-state { text-align: center; padding: 48px 24px; color: var(--muted); }
+  .empty-state .emoji { font-size: 40px; margin-bottom: 12px; }
+  .empty-state p { font-size: 14px; line-height: 1.6; }
+  .loading { text-align: center; padding: 60px 20px; color: var(--muted); font-family: var(--font-mono); font-size: 13px; letter-spacing: 1px; }
+  .loading-dot { display: inline-block; animation: blink 1.2s infinite; }
+  .loading-dot:nth-child(2) { animation-delay: 0.2s; }
+  .loading-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%,80%,100%{opacity:.2} 40%{opacity:1} }
+
+  /* ── MODAL ── */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 200; display: flex; align-items: flex-end; backdrop-filter: blur(4px); }
+  .modal { background: #ffffff; border: 1px solid #c9a060; border-radius: 16px 16px 0 0; width: 100%; max-width: 480px; margin: 0 auto; padding: 20px 16px 40px; max-height: 75dvh; overflow-y: auto; }
+  body.dark .modal { background: #2a1f0e; border-color: #4a3520; }
+  .modal-title { font-size: 16px; font-weight: 800; color: #2a1c08; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px; }
+  body.dark .modal-title { color: #f0e0c0; }
+  .modal-option { display: flex; align-items: center; justify-content: space-between; padding: 13px 14px; border: 1.5px solid #b87540; border-radius: 10px; margin-bottom: 8px; cursor: pointer; font-size: 14px; font-weight: 700; color: #2a1c08; background: #e8c98e; }
+  body.dark .modal-option { color: #f0e0c0; background: #342812; border-color: #4a3520; }
+  .modal-option.selected { border-color: #c45508; background: rgba(196,85,8,0.1); }
+  body.dark .modal-option.selected { background: rgba(212,100,32,0.18); }
+  .modal-check { color: #c45508; font-size: 16px; flex-shrink: 0; }
+  .data-note { text-align: center; font-family: var(--font-mono); font-size: 10px; color: var(--muted); margin-top: 12px; }
+  .error-banner { background: rgba(184,50,50,0.1); border: 1px solid var(--red); border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; font-size: 12px; color: var(--red); font-family: var(--font-mono); }
+
+  .fade-in { animation: fadeIn 0.18s ease; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-top">
+    <div class="logo">
+      <div class="logo-main">Sickos</div>
+      <div class="logo-sub">College Basketball</div>
+    </div>
+    <div class="header-right">
+      <div class="team-pill" id="team-pill-btn">
+        <div class="team-pill-dot"></div>
+        <span id="header-team-name">My Team</span>
+      </div>
+      <button class="mode-btn" id="mode-btn">☾</button>
+    </div>
+  </div>
+  <div class="tabs">
+    <div class="tab active"  data-tab="scoreboard">Scoreboard</div>
+    <div class="tab"         data-tab="standings">Standings</div>
+    <div class="tab"         data-tab="stats">Stats</div>
+  </div>
+</header>
+
+<div class="date-nav" id="date-nav">
+  <button class="date-arrow" id="date-prev">‹</button>
+  <label class="date-display" for="date-picker-input" style="cursor:pointer;flex:1;text-align:center">
+    <div class="date-main" id="date-label">Mar 15, 2026</div>
+    <div class="date-hint">2025–26 season · tap to jump</div>
+  </label>
+  <button class="date-arrow" id="date-next">›</button>
+  <input type="date" id="date-picker-input" min="2025-11-03" max="2026-03-15"
+         style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;overflow:hidden">
+</div>
+
+<main id="app"></main>
+
+<div class="modal-overlay" id="team-modal" style="display:none">
+  <div class="modal">
+    <div class="modal-title">YOUR TEAM</div>
+    <div id="team-modal-options"></div>
+    <div class="data-note">Saved on your device only — no login needed</div>
+  </div>
+</div>
+
+<script>
+// ─── CONFIG ────────────────────────────────────────────────────────────────────
+const SHEET_ID     = '1SDyVjpmVZuoq3H7J-w4qYrnhE4KgfmPmUPnsmi4JCEg';
+const SEASON_START = '2025-11-03';
+const SEASON_END   = '2026-03-15';
+
+// ─── SCHOOL COLORS ─────────────────────────────────────────────────────────────
+const SCHOOL_COLORS = {
+  'Abilene Christian': ['#4F2170','#FFFFFF'],
+  'Air Force': ['#003087','#8A8D8F'],
+  'Akron': ['#041E42','#A89968'],
+  'Alabama': ['#9E1B32','#FFFFFF'],
+  'Alabama A&M': ['#660000','#FFFFFF'],
+  'Alabama State': ['#C99700','#000000'],
+  'Albany': ['#461660','#EEB211'],
+  'Alcorn State': ['#4B306A','#C38300'],
+  'American': ['#143D8D','#FFFFFF'],
+  'Appalachian State': ['#222222','#FFCC00'],
+  'Arizona': ['#CC0033','#FFFFFF'],
+  'Arizona State': ['#8C1340','#FFC627'],
+  'Arkansas': ['#9D2235','#FFFFFF'],
+  'Arkansas State': ['#CC092F','#000000'],
+  'Army': ['#D4BF91','#000000'],
+  'Auburn': ['#0C2340','#E87722'],
+  'Austin Peay': ['#C41E3A','#FFFFFF'],
+  'Ball State': ['#BA0C2F','#000000'],
+  'Baylor': ['#154734','#FFB81C'],
+  'Bellarmine': ['#752936','#C8C8C8'],
+  'Belmont': ['#C8102E','#FFFFFF'],
+  'Bethune-Cookman': ['#6F263D','#F2A900'],
+  'Binghamton': ['#005A43','#FFFFFF'],
+  'Boise State': ['#0033A0','#FFFFFF'],
+  'Boston College': ['#98002E','#BC9B61'],
+  'Boston University': ['#A3011B','#FFFFFF'],
+  'Bowling Green': ['#F35000','#4F2C1D'],
+  'Bradley': ['#A50000','#FFFFFF'],
+  'Brown': ['#4E3629','#FFFFFF'],
+  'Bryant': ['#B4975B','#000000'],
+  'Bucknell': ['#E87722','#003865'],
+  'Buffalo': ['#005BBB','#FFFFFF'],
+  'Butler': ['#13294B','#FFFFFF'],
+  'BYU': ['#0062B8','#FFFFFF'],
+  'Cal Baptist': ['#002554','#A37400'],
+  'Cal Poly': ['#003831','#FFE395'],
+  'Cal State Bakersfield': ['#003594','#FFC72C'],
+  'Cal State Fullerton': ['#00274C','#DC8218'],
+  'California': ['#003262','#FDB515'],
+  'Campbell': ['#F58025','#000000'],
+  'Canisius': ['#0C2340','#FFBA00'],
+  'Central Arkansas': ['#4F2D7F','#FFFFFF'],
+  'Central Connecticut': ['#00539B','#FFFFFF'],
+  'Central Michigan': ['#6A0032','#FFC82E'],
+  'Charleston': ['#800000','#9D8958'],
+  'Charleston Southern': ['#A89963','#002855'],
+  'Charlotte': ['#046A38','#FFFFFF'],
+  'Chattanooga': ['#00386B','#E0AA0F'],
+  'Chicago State': ['#006666','#FFFFFF'],
+  'Cincinnati': ['#E00122','#000000'],
+  'Clemson': ['#F56600','#522D80'],
+  'Cleveland State': ['#006747','#FFFFFF'],
+  'Coastal Carolina': ['#006F71','#FFFFFF'],
+  'Colgate': ['#821019','#FFFFFF'],
+  'Colorado': ['#CFB87C','#000000'],
+  'Colorado State': ['#1E4D2B','#C8C372'],
+  'Columbia': ['#9BCBEB','#003865'],
+  'Connecticut': ['#000E2F','#FFFFFF'],
+  'Coppin State': ['#003056','#FFC915'],
+  'Cornell': ['#B31B1B','#FFFFFF'],
+  'Creighton': ['#005CA9','#FFFFFF'],
+  'CSUN': ['#CE1126','#D1C3C6'],
+  'Dartmouth': ['#046A38','#FFFFFF'],
+  'Davidson': ['#AC1A2F','#FFFFFF'],
+  'Dayton': ['#CE1141','#FFFFFF'],
+  'Delaware': ['#00539F','#FFDD31'],
+  'Delaware State': ['#EE3124','#000000'],
+  'Denver': ['#8B2332','#FFFFFF'],
+  'DePaul': ['#005EB8','#FFFFFF'],
+  'Detroit Mercy': ['#A6093D','#FFFFFF'],
+  'Drake': ['#004477','#999999'],
+  'Drexel': ['#00437B','#FFDA02'],
+  'Duke': ['#003087','#FFFFFF'],
+  'Duquesne': ['#041E42','#FFFFFF'],
+  'East Carolina': ['#592A8A','#FDC82F'],
+  'East Tennessee State': ['#041E42','#FFC72C'],
+  'East Texas A&M': ['#00386C','#FFC333'],
+  'Eastern Illinois': ['#004B83','#FFFFFF'],
+  'Eastern Kentucky': ['#8A0039','#FFFFFF'],
+  'Eastern Michigan': ['#006633','#FFFFFF'],
+  'Eastern Washington': ['#A10022','#FFFFFF'],
+  'Elon': ['#73000A','#B59A57'],
+  'Evansville': ['#52237F','#F36F21'],
+  'Fairfield': ['#C8102E','#FFFFFF'],
+  'Fairleigh Dickinson': ['#283341','#FFFFFF'],
+  'FAU': ['#003366','#FFFFFF'],
+  'FIU': ['#081E3F','#B6862C'],
+  'Florida': ['#0021A5','#FA4616'],
+  'Florida A&M': ['#EE7624','#000000'],
+  'Florida Gulf Coast': ['#002D72','#FFFFFF'],
+  'Florida State': ['#782F40','#CEB888'],
+  'Fordham': ['#860038','#FFFFFF'],
+  'Fresno State': ['#DB0032','#FFFFFF'],
+  'Furman': ['#201547','#A7A8AA'],
+  'Gardner-Webb': ['#BF2F37','#000000'],
+  'George Mason': ['#006633','#FFCC33'],
+  'George Washington': ['#E2CB92','#002654'],
+  'Georgetown': ['#041E42','#8D817B'],
+  'Georgia': ['#BA0C2F','#000000'],
+  'Georgia Southern': ['#011E41','#87714D'],
+  'Georgia State': ['#0039A6','#FFFFFF'],
+  'Georgia Tech': ['#B3A369','#003057'],
+  'Gonzaga': ['#041E42','#FFFFFF'],
+  'Grambling': ['#000000','#EAA921'],
+  'Grand Canyon': ['#522398','#FFFFFF'],
+  'Green Bay': ['#006747','#FFFFFF'],
+  'Hampton': ['#0060A9','#FFFFFF'],
+  'Harvard': ['#A41034','#FFFFFF'],
+  'Hawai\'i': ['#024731','#C8C8C8'],
+  'High Point': ['#330072','#FFFFFF'],
+  'Hofstra': ['#0B1E73','#FEB612'],
+  'Holy Cross': ['#602D89','#FFFFFF'],
+  'Houston': ['#C8102E','#FFFFFF'],
+  'Houston Christian': ['#1C439D','#FFFFFF'],
+  'Howard': ['#003A63','#FFFFFF'],
+  'Idaho': ['#B3A369','#000000'],
+  'Idaho State': ['#FF671F','#000000'],
+  'Illinois': ['#E84A27','#13294B'],
+  'Illinois State': ['#CE1126','#FFFFFF'],
+  'Incarnate Word': ['#CB333B','#000000'],
+  'Indiana': ['#960009','#EEEDEB'],
+  'Indiana State': ['#0142BC','#FFFFFF'],
+  'Iona': ['#6F2C3F','#F2A900'],
+  'Iowa': ['#FFCD00','#000000'],
+  'Iowa State': ['#C8102E','#F1BE48'],
+  'IU Indy': ['#9D2235','#DFD1A7'],
+  'Jackson State': ['#002147','#FFFFFF'],
+  'Jacksonville': ['#004E44','#FFFFFF'],
+  'Jacksonville State': ['#CC0000','#000000'],
+  'James Madison': ['#450084','#CBB677'],
+  'kansas': ['#0051BA','#FFFFFF'],
+  'Kansas City': ['#005293','#FECB00'],
+  'Kansas State': ['#512888','#D1D1D1'],
+  'Kennesaw State': ['#FDBB30','#000000'],
+  'Kent State': ['#002664','#EAAB00'],
+  'Kentucky': ['#0033A0','#FFFFFF'],
+  'La Salle': ['#FFCC00','#003366'],
+  'Lafayette': ['#A89963','#98002E'],
+  'Lamar': ['#DC0032','#FFFFFF'],
+  'Le Moyne': ['#00452A','#FCE300'],
+  'Lehigh': ['#653600','#FFD24F'],
+  'Liberty': ['#002D62','#FFFFFF'],
+  'Lindenwood': ['#B5A36A','#000000'],
+  'Lipscomb': ['#331E54','#F4AA00'],
+  'Little Rock': ['#6E2639','#A7A9AC'],
+  'LIU': ['#69B3E7','#000000'],
+  'Long Beach State': ['#FFC72A','#000000'],
+  'Longwood': ['#15213B','#999D93'],
+  'Louisiana': ['#CE1813','#FFFFFF'],
+  'Louisiana Tech': ['#002F8B','#FFFFFF'],
+  'Louisiana-Monroe': ['#840029','#FDB913'],
+  'Louisville': ['#AD0000','#FFFFFF'],
+  'Loyola Chicago': ['#922247','#FEBD18'],
+  'Loyola Maryland': ['#006943','#CACAC8'],
+  'Loyola Marymount': ['#0076A5','#FFFFFF'],
+  'LSU': ['#461D7C','#FDD023'],
+  'Maine': ['#003263','#B0D7FF'],
+  'Manhattan': ['#00703C','#FFFFFF'],
+  'Marist': ['#C8102E','#FFFFFF'],
+  'Marquette': ['#003366','#FFCC00'],
+  'Marshall': ['#00B140','#000000'],
+  'Maryland': ['#E03A3E','#FFD520'],
+  'McNeese': ['#00529B','#FFD204'],
+  'Memphis': ['#003087','#898D8D'],
+  'Mercer': ['#F76800','#000000'],
+  'Mercyhurst': ['#07594D','#FFFFFF'],
+  'Merrimack': ['#003768','#FDB813'],
+  'Miami': ['#005030','#F47321'],
+  'Miami University': ['#B61E2E','#FFFFFF'],
+  'Michigan': ['#00274C','#FFCB05'],
+  'Michigan State': ['#18453B','#FFFFFF'],
+  'Middle Tennessee': ['#0066CC','#000000'],
+  'Milwaukee': ['#FFBD00','#000000'],
+  'Minnesota': ['#7A0019','#FFCC33'],
+  'Mississippi State': ['#660000','#FFFFFF'],
+  'Mississippi Valley State': ['#00703C','#FFFFFF'],
+  'Missouri State': ['#530009','#FFFFFF'],
+  'Mizzou': ['#000000','#F1B82D'],
+  'Monmouth': ['#041E42','#FFFFFF'],
+  'Montana': ['#660033','#999999'],
+  'Montana State': ['#00205B','#B9975B'],
+  'Morehead State': ['#005EB8','#FFCF00'],
+  'Morgan State': ['#1B4383','#F47937'],
+  'Mount St. Mary\'s': ['#002855','#84754E'],
+  'Murray State': ['#ECAC00','#002144'],
+  'Navy': ['#00205B','#C5B783'],
+  'NC State': ['#CC0000','#FFFFFF'],
+  'Nebraska': ['#E41C38','#FFFFFF'],
+  'Nevada': ['#003366','#807F84'],
+  'New Hampshire': ['#041E42','#BBBCBC'],
+  'New Haven': ['#004B8D','#FFC423'],
+  'New Mexico': ['#BA0C2F','#FFFFFF'],
+  'New Mexico State': ['#861F41','#97999B'],
+  'New Orleans': ['#005CA6','#FFFFFF'],
+  'Niagara': ['#582C83','#FFFFFF'],
+  'Nicholls': ['#AE132A','#FFFFFF'],
+  'NJIT': ['#D22630','#071D49'],
+  'Norfolk State': ['#007A53','#F3D03E'],
+  'North Alabama': ['#46166B','#DB9F11'],
+  'North Carolina': ['#7BAFD4','#000000'],
+  'North Carolina A&T': ['#F3B237','#003D6D'],
+  'North Carolina Central': ['#880023','#8E9093'],
+  'North Dakota': ['#009A44','#000000'],
+  'North Dakota State': ['#0A5640','#FFC72A'],
+  'North Florida': ['#00246B','#D9D9D9'],
+  'North Texas': ['#00853E','#000000'],
+  'Northeastern': ['#D41B2C','#000000'],
+  'Northern Arizona': ['#003466','#FFD200'],
+  'Northern Colorado': ['#013C65','#F6B000'],
+  'Northern Illinois': ['#BA0C2F','#000000'],
+  'Northern Iowa': ['#4B116F','#FFCC00'],
+  'Northern Kentucky': ['#000000','#FFC72C'],
+  'Northwestern': ['#4E2A84','#FFFFFF'],
+  'Northwestern State': ['#663399','#FFFFFF'],
+  'Notre Dame': ['#0C2340','#C99700'],
+  'Oakland': ['#B59A57','#000000'],
+  'Ohio': ['#00694E','#FFFFFF'],
+  'Ohio State': ['#BB0000','#B1B7BC'],
+  'Oklahoma': ['#841617','#FDF9D8'],
+  'Oklahoma State': ['#FF7300','#000000'],
+  'Old Dominion': ['#003057','#7C878E'],
+  'Ole Miss': ['#14213D','#FFFFFF'],
+  'Omaha': ['#000000','#D71920'],
+  'Oral Roberts': ['#002F60','#C5B783'],
+  'Oregon': ['#154733','#FEE123'],
+  'Oregon State': ['#DC4405','#000000'],
+  'Pacific': ['#E35205','#231F20'],
+  'Penn': ['#011F5B','#FFFFFF'],
+  'Penn State': ['#041E42','#FFFFFF'],
+  'Pepperdine': ['#00205C','#EE7624'],
+  'Pittsburgh': ['#003594','#FFB81C'],
+  'Portland': ['#320274','#FFFFFF'],
+  'Portland State': ['#154734','#FFFFFF'],
+  'Prairie View A&M': ['#330066','#FFCC33'],
+  'Presbyterian': ['#0060A9','#FFFFFF'],
+  'Princeton': ['#FF571F','#000000'],
+  'Providence': ['#000000','#8A8D8F'],
+  'Purdue': ['#CEB888','#000000'],
+  'Purdue Fort Wayne': ['#CFB991','#000000'],
+  'Queens': ['#192C66','#FFFFFF'],
+  'Quinnipiac': ['#0C2340','#FFB81C'],
+  'Radford': ['#C2011B','#D1D3D4'],
+  'Rhode Island': ['#68ABE8','#002147'],
+  'Rice': ['#00205B','#C1C6C8'],
+  'Richmond': ['#000066','#FFFFFF'],
+  'Rider': ['#981E32','#FFFFFF'],
+  'Robert Morris': ['#14234B','#FFFFFF'],
+  'Rutgers': ['#CC0033','#FFFFFF'],
+  'Sacramento State': ['#043927','#C4B581'],
+  'Sacred Heart': ['#CE1141','#FFFFFF'],
+  'Saint Francis': ['#BD1F25','#FFFFFF'],
+  'Saint Joseph\'s': ['#931B32','#FFFFFF'],
+  'Saint Louis': ['#003DA5','#C8C9C7'],
+  'Saint Mary\'s': ['#D80024','#FFFFFF'],
+  'Saint Peter\'s': ['#003C71','#A59C94'],
+  'Sam Houston': ['#FE5100','#FFFFFF'],
+  'Samford': ['#002649','#FFFFFF'],
+  'San Diego': ['#002868','#84BCE8'],
+  'San Diego State': ['#A6192E','#FFFFFF'],
+  'San Francisco': ['#00543C','#FDBB30'],
+  'San Jose State': ['#0055A2','#E5A823'],
+  'Santa Clara': ['#862633','#FFFFFF'],
+  'Seattle U': ['#AA0000','#FFFFFF'],
+  'SEMO': ['#C8102E','#000000'],
+  'Seton Hall': ['#004488','#A2AAAD'],
+  'Siena': ['#006747','#FFC72C'],
+  'SIUE': ['#EF3829','#000000'],
+  'SMU': ['#0033A0','#FFFFFF'],
+  'South Alabama': ['#00205B','#FFFFFF'],
+  'South Carolina': ['#73000A','#FFFFFF'],
+  'South Carolina State': ['#862633','#FFFFFF'],
+  'South Dakota': ['#AD0000','#B4B4B4'],
+  'South Dakota State': ['#0033A0','#FFD100'],
+  'South Florida': ['#006747','#CFC493'],
+  'Southeastern Louisiana': ['#006341','#EAAA00'],
+  'Southern': ['#58B6E7','#000000'],
+  'Southern Illinois': ['#720000','#FFFFFF'],
+  'Southern Indiana': ['#CF102D','#FFFFFF'],
+  'Southern Miss': ['#FFAB00','#000000'],
+  'Southern Utah': ['#C41425','#000000'],
+  'St. Bonaventure': ['#54261A','#BDB680'],
+  'St. John\'s': ['#BA0C2F','#FFFFFF'],
+  'St. Thomas': ['#510C76','#98999B'],
+  'Stanford': ['#8C1515','#FFFFFF'],
+  'Stephen F. Austin': ['#613393','#FFFFFF'],
+  'Stetson': ['#00523E','#FFFFFF'],
+  'Stonehill': ['#2F2975','#FFFFFF'],
+  'Stony Brook': ['#990000','#FFFFFF'],
+  'Syracuse': ['#F76900','#000354'],
+  'TAMUCC': ['#0067C5','#FFFFFF'],
+  'Tarleton': ['#4F2D7F','#FFFFFF'],
+  'TCU': ['#4D1979','#FFFFFF'],
+  'Temple': ['#9D2235','#FFFFFF'],
+  'Tennessee': ['#FF8200','#000000'],
+  'Tennessee State': ['#00539F','#FFFFFF'],
+  'Tennessee Tech': ['#4F2984','#FFDD00'],
+  'Texas': ['#BF5700','#FFFFFF'],
+  'Texas A&M': ['#500000','#FFFFFF'],
+  'Texas Southern': ['#7C183E','#9DA6AB'],
+  'Texas State': ['#501214','#8D734A'],
+  'Texas Tech': ['#000000','#CC0000'],
+  'The Citadel': ['#3975B7','#FFFFFF'],
+  'Toledo': ['#15397F','#FFDA00'],
+  'Towson': ['#FFBB00','#3C3C3C'],
+  'Troy': ['#8A2432','#B3B5B8'],
+  'Tulane': ['#006747','#FFFFFF'],
+  'Tulsa': ['#002D72','#C5B783'],
+  'UAB': ['#006341','#FFFFFF'],
+  'UAPB': ['#EEB310','#000000'],
+  'UC Davis': ['#002855','#B3A369'],
+  'UC Irvine': ['#0C2340','#FFC72C'],
+  'UC Riverside': ['#2D6CC0','#FFFFFF'],
+  'UC San Diego': ['#182B49','#FFCD00'],
+  'UC Santa Barbara': ['#003660','#F3BC11'],
+  'UCF': ['#BA9B37','#000000'],
+  'UCLA': ['#2D68C4','#FFFFFF'],
+  'UIC': ['#AC1E2D','#FFFFFF'],
+  'Massachusetts': ['#572932','#FFFFFF'],
+  'UMass Lowell': ['#003DA5','#FFFFFF'],
+  'UMBC': ['#B18906','#000000'],
+  'UMES': ['#862633','#FFFFFF'],
+  'UNC Asheville': ['#003DA5','#FFFFFF'],
+  'UNC Greensboro': ['#0F2044','#FFB71B'],
+  'UNC Wilmington': ['#006666','#FFFFFF'],
+  'UNLV': ['#CF0A2C','#CAC8C8'],
+  'USC': ['#990000','#FFC72C'],
+  'USC Upstate': ['#00703C','#000000'],
+  'UT Arlington': ['#F58025','#000000'],
+  'UT Martin': ['#F79728','#002A5B'],
+  'Utah': ['#BE0000','#FFFFFF'],
+  'Utah State': ['#00263A','#8A8D8F'],
+  'Utah Tech': ['#BA1C21','#FFFFFF'],
+  'Utah Valley': ['#275D38','#FFFFFF'],
+  'UTEP': ['#FF8200','#041E42'],
+  'UTRGV': ['#FFA300','#000000'],
+  'UTSA': ['#F15A22','#0C2340'],
+  'Valparaiso': ['#381E0E','#FFCC00'],
+  'Vanderbilt': ['#866D4B','#000000'],
+  'VCU': ['#FFB300','#000000'],
+  'Vermont': ['#154734','#FFC72C'],
+  'Villanova': ['#00205B','#13B5EA'],
+  'Virginia': ['#232D4B','#F84C1E'],
+  'Virginia Tech': ['#630031','#FFFFFF'],
+  'VMI': ['#A71F23','#FFD520'],
+  'Wagner': ['#00483A','#B9BBBD'],
+  'Wake Forest': ['#937E38','#000000'],
+  'Washington': ['#4B2E83','#B7A57A'],
+  'Washington State': ['#981E32','#FFFFFF'],
+  'Weber State': ['#4B2672','#A1A1A4'],
+  'West Georgia': ['#0656A5','#FFFFFF'],
+  'West Virginia': ['#002855','#FAAA00'],
+  'Western Carolina': ['#592C88','#C1A875'],
+  'Western Illinois': ['#663399','#FFCC00'],
+  'Western Kentucky': ['#C60C30','#000000'],
+  'Western Michigan': ['#6C4023','#B5A167'],
+  'Wichita State': ['#FFCD00','#000000'],
+  'William & Mary': ['#115740','#F0B323'],
+  'Winthrop': ['#660000','#F0B323'],
+  'Wisconsin': ['#C5050C','#FFFFFF'],
+  'Wofford': ['#88634C','#000000'],
+  'Wright State': ['#026937','#FFFFFF'],
+  'Wyoming': ['#FFC425','#492F24'],
+  'Xavier': ['#0C2340','#93A2A2'],
+  'Yale': ['#00356B','#FFFFFF'],
+  'Youngstown State': ['#C8102E','#FFFFFF'],
+};
+
+// Returns a jersey-nameplate styled span for a school name
+function schoolTag(school) {
+  const colors = SCHOOL_COLORS[school];
+  if (!colors) return `<span class="school-tag">${school}</span>`;
+  const [bg, text] = colors;
+  return `<span class="school-tag" style="background:${bg};color:${text}">${school}</span>`;
+}
+
+// ─── COLUMN MAPS (positional, bypasses gviz label mangling) ───────────────────
+// Game Log (locked): no meta row, gviz consumed header as cols, rows[] = data
+const GL = { Team:1, Date:2, Player:3, School:4, Conference:5, Opponent:6,
+             GameNumber:7, RosterStatus:8, Minutes:9, Points:10, Rebounds:11, Assists:12, PRA:13 };
+
+// Player Stats (locked): meta row + header row before data, skip first 2 gviz rows
+// cols: 0=Team,1=DraftRound,2=Player,3=School,4=Conference,5=GamesPlayed,
+//       6=TotalPRA,7=PRAG,8=HighPRA,9=LowPRA,10=PPG,11=RPG,12=APG,
+//       13=DNPs,14=Points,15=Rebounds,16=Assists,17=LastFirst,
+//       18=GPplusDNP,19=PRAGlast5,20=GamesRemaining,21=CurrentStatus
+const PS = { Team:0, Player:2, School:3, Conference:4, GamesPlayed:5,
+             TotalPRA:6, PRAG:7, PPG:10, RPG:11, APG:12,
+             Points:14, Rebounds:15, Assists:16,
+             GPplusDNP:18, RosterStatus:21 };
+const PS_SKIP = 2;
+
+// api_standings: no meta row, rows[] = data
+const ST = { Rank:0, Team:1, TotalPRA:2, PRABehind:3 };
+
+// ─── STATE ─────────────────────────────────────────────────────────────────────
+let myTeam         = localStorage.getItem('sickos_team') || null;
+let currentTab     = 'scoreboard';
+let viewDate       = SEASON_END;
+let scoreFilter    = null;
+let statSort       = 'total';
+let statTeamFilter = 'ALL';
+let statConfFilter = 'ALL';
+let statView       = 'total'; // 'total' or 'pergame'
+// Navigation stack for back button
+let navStack       = [];
+
+let gameLog    = null;
+let standings  = null;
+let playerStats= null;
+let locationMap= {};
+let awayHomeMap= {};
+let allSickos  = [];
+
+// ─── EVENT DELEGATION ──────────────────────────────────────────────────────────
+// All dynamic content uses data-action + data-* attributes.
+// Static header buttons use direct listeners below.
+document.addEventListener('click', function(e) {
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  const action = el.dataset.action;
+
+  if (action === 'score-filter') { scoreFilter = el.dataset.team; renderScoreboard(); }
+  else if (action === 'view-team') { viewTeam(el.dataset.team); }
+  else if (action === 'view-player') { viewPlayerLog(el.dataset.team, el.dataset.player); }
+  else if (action === 'back') { navBack(); }
+  else if (action === 'set-stat-sort') { statSort = el.dataset.sort; renderStats(); }
+  else if (action === 'set-stat-view') { statView = el.dataset.view; statSort = statView === 'total' ? 'total' : 'prag'; renderStats(); }
+  else if (action === 'select-my-team') { selectMyTeam(el.dataset.team); }
+});
+
+// Stats team filter (select element)
+document.addEventListener('change', function(e) {
+  if (e.target.id === 'stat-team-select') { statTeamFilter = e.target.value; renderStats(); }
+  if (e.target.id === 'stat-conf-select') { statConfFilter = e.target.value; renderStats(); }
+  if (e.target.id === 'date-picker-input') { onPickerChange(e.target.value); }
+});
+
+// Static header buttons
+document.querySelectorAll('[data-tab]').forEach(el => {
+  el.addEventListener('click', () => switchTab(el.dataset.tab));
+});
+document.getElementById('team-pill-btn').addEventListener('click', openTeamModal);
+document.getElementById('date-prev').addEventListener('click', () => shiftDate(-1));
+document.getElementById('date-next').addEventListener('click', () => shiftDate(1));
+document.getElementById('team-modal').addEventListener('click', function(e) {
+  if (e.target === this) this.style.display = 'none';
+});
+
+// ─── FETCH ─────────────────────────────────────────────────────────────────────
+async function gvizFetch(sheetName) {
+  const url  = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
+  const res  = await fetch(url);
+  const text = await res.text();
+  const json = JSON.parse(text.replace(/^[^(]+\(/, '').replace(/\);?\s*$/, ''));
+  return json.table.rows;
+}
+
+function cell(row, idx) {
+  if (!row || !row.c || idx >= row.c.length || !row.c[idx]) return null;
+  return row.c[idx].v ?? null;
+}
+
+function parseDate(v) {
+  if (!v) return null;
+  if (typeof v === 'string') {
+    const m = v.match(/^Date\((\d+),(\d+),(\d+)\)$/);
+    if (m) return `${m[1]}-${String(+m[2]+1).padStart(2,'0')}-${String(+m[3]).padStart(2,'0')}`;
+    if (/^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0,10);
+  }
+  return null;
+}
+
+function fmtDate(ymd) {
+  if (!ymd) return '';
+  const d = new Date(ymd + 'T12:00:00Z');
+  return d.toLocaleDateString('en-US', { month:'short', day:'numeric', timeZone:'UTC' });
+}
+
+// ─── INIT ──────────────────────────────────────────────────────────────────────
+async function init() {
+  updateHeaderTeam();
+  setApp(loadingHTML());
+
+  const errors = [];
+  const [glRes, stRes, psRes, msRes] = await Promise.allSettled([
+    gvizFetch('Game Log (locked)'),
+    gvizFetch('api_standings'),
+    gvizFetch('Player Stats (locked)'),
+    gvizFetch('master_schedule'),
+  ]);
+
+  // Game Log (locked)
+  if (glRes.status === 'fulfilled') {
+    gameLog = [];
+    for (let i = 0; i < glRes.value.length; i++) {
+      const r = glRes.value[i];
+      const player = cell(r, GL.Player);
+      const ymd    = parseDate(cell(r, GL.Date));
+      if (!player || !ymd) continue;
+      gameLog.push({
+        _ymd: ymd,
+        Team: cell(r, GL.Team),         Player: player,
+        School: cell(r, GL.School),     Conference: cell(r, GL.Conference),
+        Opponent: cell(r, GL.Opponent), GameNumber: cell(r, GL.GameNumber),
+        RosterStatus: cell(r, GL.RosterStatus), Minutes: cell(r, GL.Minutes),
+        Points: cell(r, GL.Points),     Rebounds: cell(r, GL.Rebounds),
+        Assists: cell(r, GL.Assists),   PRA: cell(r, GL.PRA),
+      });
+    }
+  } else { gameLog = []; errors.push('Game Log failed'); console.error(glRes.reason); }
+
+  // api_standings
+  if (stRes.status === 'fulfilled') {
+    standings = [];
+    for (let i = 0; i < stRes.value.length; i++) {
+      const r = stRes.value[i];
+      const rank = cell(r, ST.Rank), team = cell(r, ST.Team);
+      if (rank == null || isNaN(Number(rank)) || !team) continue;
+      standings.push({ Rank: Number(rank), Team: String(team),
+                       TotalPRA: cell(r, ST.TotalPRA), PRABehind: cell(r, ST.PRABehind) });
+    }
+    allSickos = standings.map(r => r.Team);
+  } else { standings = []; errors.push('Standings failed'); console.error(stRes.reason); }
+
+  // Player Stats (locked) — skip 2 rows (meta + header)
+  if (psRes.status === 'fulfilled') {
+    playerStats = [];
+    for (let i = PS_SKIP; i < psRes.value.length; i++) {
+      const r = psRes.value[i];
+      const player = cell(r, PS.Player), team = cell(r, PS.Team);
+      if (!player || !team) continue;
+      playerStats.push({
+        Team: String(team),           Player: String(player),
+        School: cell(r, PS.School),   Conference: cell(r, PS.Conference),
+        RosterStatus: cell(r, PS.RosterStatus),
+        GamesPlayed: cell(r, PS.GamesPlayed), GPplusDNP: cell(r, PS.GPplusDNP),
+        TotalPRA: cell(r, PS.TotalPRA),       PRAG: cell(r, PS.PRAG),
+        PPG: cell(r, PS.PPG), RPG: cell(r, PS.RPG), APG: cell(r, PS.APG),
+        Points: cell(r, PS.Points), Rebounds: cell(r, PS.Rebounds), Assists: cell(r, PS.Assists),
+      });
+    }
+  } else { playerStats = []; errors.push('Player Stats failed'); console.error(psRes.reason); }
+
+  // ── master_schedule → location map ──
+  // cols: 5=Date, 6=Away, 7=Home, 9=Location
+  // key: sorted([away,home]).join('|') + '|' + YYYY-MM-DD
+  if (msRes.status === 'fulfilled') {
+    for (let i = 0; i < msRes.value.length; i++) {
+      const r    = msRes.value[i];
+      const away = String(cell(r,6)||'').trim();
+      const home = String(cell(r,7)||'').trim();
+      const loc  = String(cell(r,9)||'').trim();
+      const ymd  = parseDate(cell(r,5));
+      if (!away || !home || !ymd) continue;
+      const key = [away,home].sort().join('|') + '|' + ymd;
+      if (loc) locationMap[key] = loc;
+      awayHomeMap[key] = { away, home };
+    }
+  }
+
+  scoreFilter = myTeam || 'ALL';
+  renderCurrentTab(errors);
+}
+
+// ─── NAVIGATION ────────────────────────────────────────────────────────────────
+function pushNav(fn) { navStack.push(fn); }
+function navBack() {
+  navStack.pop(); // discard current
+  const prev = navStack.pop();
+  if (prev) prev(); else renderCurrentTab();
+}
+
+// ─── TAB SWITCHING ─────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  currentTab = tab;
+  navStack = [];
+  document.querySelectorAll('[data-tab]').forEach(el => {
+    el.classList.toggle('active', el.dataset.tab === tab);
+  });
+  document.getElementById('date-nav').style.display = tab === 'scoreboard' ? 'flex' : 'none';
+  renderCurrentTab();
+}
+
+function renderCurrentTab(errors) {
+  try {
+    if      (currentTab === 'scoreboard') renderScoreboard(errors);
+    else if (currentTab === 'standings')  renderStandings();
+    else                                   renderStats();
+  } catch(e) {
+    console.error('Render error:', e);
+    setApp(`<div class="error-banner">Render error: ${e.message}</div>`);
+  }
+}
+
+// ─── DATE NAV ──────────────────────────────────────────────────────────────────
+function updateDateUI() {
+  const d = new Date(viewDate + 'T12:00:00Z');
+  document.getElementById('date-label').textContent =
+    d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric', timeZone:'UTC' });
+  document.getElementById('date-prev').toggleAttribute('disabled', viewDate <= SEASON_START);
+  document.getElementById('date-next').toggleAttribute('disabled', viewDate >= SEASON_END);
+}
+
+function shiftDate(delta) {
+  const d = new Date(viewDate + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + delta);
+  const ymd = d.toISOString().slice(0,10);
+  if (ymd < SEASON_START || ymd > SEASON_END) return;
+  viewDate = ymd; updateDateUI(); renderScoreboard();
+}
+
+function openDatePicker() {
+  const inp = document.getElementById('date-picker-input');
+  inp.value = viewDate;
+  try { inp.showPicker(); } catch(_) { inp.click(); }
+}
+
+function onPickerChange(val) {
+  if (!val) return;
+  viewDate = val < SEASON_START ? SEASON_START : val > SEASON_END ? SEASON_END : val;
+  updateDateUI(); renderScoreboard();
+}
+
+// ─── SCOREBOARD ────────────────────────────────────────────────────────────────
+function renderScoreboard(errors) {
+  updateDateUI();
+  if (!gameLog) { setApp(loadingHTML()); return; }
+
+  const dayRows  = gameLog.filter(r => r._ymd === viewDate);
+  const chips    = ['ALL', ...allSickos].map(t => {
+    const label = t === 'ALL' ? 'All' : t;
+    const active = scoreFilter === t ? 'active' : '';
+    return `<div class="team-chip ${active}" data-action="score-filter" data-team="${t}">${label}</div>`;
+  }).join('');
+
+  const filtered    = scoreFilter === 'ALL' ? dayRows : dayRows.filter(r => r.Team === scoreFilter);
+  const starterRows = filtered.filter(r => r.RosterStatus === 'Starter');
+  const todayPRA    = starterRows.reduce((s, r) => s + (Number(r.PRA) || 0), 0);
+  const playedCnt   = starterRows.filter(r => String(r.GameNumber) !== 'DNP').length;
+
+  const games = {};
+  filtered.forEach(r => {
+    const key = [r.School||'', r.Opponent||''].sort().join('|||');
+    if (!games[key]) {
+      // Look up canonical away/home from master_schedule
+      const ahKey = [r.School||'', r.Opponent||''].sort().join('|') + '|' + viewDate;
+      const ah    = awayHomeMap[ahKey];
+      const away  = ah ? ah.away : r.School;
+      const home  = ah ? ah.home : r.Opponent;
+      games[key]  = { away, home, players: [] };
+    }
+    games[key].players.push(r);
+  });
+
+  let cards = '';
+  const matchupList = Object.values(games);
+  if (!matchupList.length) {
+    const anyToday = dayRows.length;
+    cards = `<div class="empty-state"><div class="emoji">${anyToday ? '🔍' : '📅'}</div>
+      <p>${anyToday ? `No players from <strong>${scoreFilter}</strong><br>played on this date.`
+                    : 'No games were played on this date.'}
+      <br><span style="font-size:12px;color:var(--muted)">Use ‹ › to find a game day.</span></p></div>`;
+  } else {
+    matchupList.forEach(g => {
+      g.players.sort((a, b) => {
+        const ord = { Starter:0, Bench:1 };
+        const d = (ord[a.RosterStatus]??2) - (ord[b.RosterStatus]??2);
+        return d !== 0 ? d : (Number(b.PRA)||0) - (Number(a.PRA)||0);
+      });
+      const playerRows = g.players.map(p => {
+        const isDNP  = String(p.GameNumber) === 'DNP';
+        const pra    = isDNP ? 0 : (Number(p.PRA) || 0);
+        const status = p.RosterStatus || '';
+        const sCls   = isDNP ? 'status-dnp' : status==='Starter' ? 'status-starter' : status==='Bench' ? 'status-bench' : 'status-inactive';
+        const praCls = isDNP ? '' : pra>=40 ? 'pra-fire' : pra>=28 ? 'pra-hot' : '';
+        const teamTag = scoreFilter === 'ALL'
+          ? `<span style="font-size:10px;color:var(--muted)"> · ${p.Team||''}</span>` : '';
+        return `<div class="player-row">
+          <div class="player-info">
+            <div class="player-name">${p.Player||''}${teamTag}</div>
+            <div class="player-school">${schoolTag(p.School||'')} ${p.Conference||''}</div>
+          </div>
+          <span class="player-status ${sCls}">${status}</span>
+          <div class="pra-block">
+            ${isDNP ? `<div class="pra-big" style="font-size:22px;color:var(--red)">DNP</div>`
+                    : `<div class="pra-big ${praCls}">${pra||'–'}</div>
+                       ${pra>0?`<div class="pra-breakdown">${Number(p.Points)||0}p ${Number(p.Rebounds)||0}r ${Number(p.Assists)||0}a</div>`:''}`}
+          </div>
+        </div>`;
+      }).join('');
+      const venueKey = [g.away||'', g.home||''].sort().join('|') + '|' + viewDate;
+      const venue    = locationMap[venueKey] || '';
+      cards += `<div class="game-card fade-in">
+        <div class="game-card-header">
+          <div class="game-matchup">${schoolTag(g.away||'')} <span style="font-size:10px;color:var(--muted);font-weight:400">vs</span> ${schoolTag(g.home||'')}</div>
+          ${venue ? `<div style="font-size:10px;color:var(--muted);margin-top:4px;font-family:var(--font-mono);letter-spacing:0.2px">${venue}</div>` : ''}
+        </div>
+        ${playerRows}</div>`;
+    });
+  }
+
+  const errBanner = (errors && errors.length) ? `<div class="error-banner">⚠ ${errors.join(' · ')}</div>` : '';
+  const bar = (filtered.length && scoreFilter !== 'ALL') ? `<div class="totals-bar">
+    <div><div class="totals-label">${scoreFilter.toUpperCase()}</div>
+         <div class="totals-sub">${starterRows.length} starters · ${playedCnt} played</div></div>
+    <div style="text-align:right"><div class="totals-val">${todayPRA.toLocaleString()}</div><div class="totals-sub">Starter PRA</div></div>
+  </div>` : '';
+
+  setApp(`<div class="fade-in">${errBanner}<div class="team-selector">${chips}</div>${bar}${cards}</div>`);
+}
+
+// ─── STANDINGS ─────────────────────────────────────────────────────────────────
+function renderStandings() {
+  navStack = [];
+  if (!standings) { setApp(loadingHTML()); return; }
+  const rows = standings.map((r, i) => {
+    const isMe = r.Team === myTeam;
+    return `<div class="standings-row ${isMe?'is-me':''}" data-action="view-team" data-team="${r.Team}">
+      <div class="rank ${i<3?'top3':''}">${r.Rank}</div>
+      <div class="standing-name">${r.Team}${isMe?' <span style="color:var(--accent)">★</span>':''}</div>
+      <div style="text-align:right;pointer-events:none">
+        <div class="standing-total">${Number(r.TotalPRA||0).toLocaleString()}</div>
+        ${r.PRABehind ? `<div class="standing-behind">–${Number(r.PRABehind).toLocaleString()}</div>`
+                      : `<div class="standing-leader">LEADER</div>`}
+      </div>
+    </div>`;
+  }).join('');
+  setApp(`<div class="fade-in">
+    <div class="section-header"><div class="section-title">STANDINGS</div><div class="badge">Final · tap for roster</div></div>
+    ${rows}
+    <div class="data-note">PRA = Points + Rebounds + Assists · Starter games only</div>
+  </div>`);
+}
+
+// ─── TEAM ROSTER ───────────────────────────────────────────────────────────────
+function viewTeam(team) {
+  pushNav(() => renderStandings());
+  pushNav(() => viewTeam(team));
+
+  const rows = (playerStats||[])
+    .filter(r => r.Team === team)
+    .sort((a,b) => (Number(b.TotalPRA)||0)-(Number(a.TotalPRA)||0));
+
+  const standingsRow = (standings||[]).find(s => s.Team === team);
+  const totalPRA     = standingsRow ? Number(standingsRow.TotalPRA) : 0;
+  const totalGP      = rows.filter(r => r.RosterStatus==='Starter')
+                           .reduce((s,r) => s+(Number(r.GPplusDNP)||0), 0);
+  const isMe = team === myTeam;
+
+  const cards = rows.map(r => {
+    const sCls = r.RosterStatus==='Starter'?'status-starter':r.RosterStatus==='Bench'?'status-bench':'status-inactive';
+    return `<div class="stats-card" data-action="view-player" data-team="${team}" data-player="${r.Player}">
+      <div class="stat-player-info">
+        <div class="stat-player-name">${r.Player}</div>
+        <div class="stat-player-meta">${schoolTag(r.School||'')} ${r.Conference||''}
+          <span class="player-status ${sCls}" style="padding:1px 6px;font-size:9px;margin-left:4px">${r.RosterStatus||''}</span>
+        </div>
+        <div class="tap-hint">tap for game log</div>
+      </div>
+      <div class="stat-nums">
+        <div class="stat-col"><div class="stat-val" style="color:var(--accent)">${Number(r.TotalPRA||0).toLocaleString()}</div><div class="stat-key">PRA</div></div>
+        <div class="stat-col"><div class="stat-val">${(Number(r.PRAG)||0).toFixed(1)}</div><div class="stat-key">PRA/G</div></div>
+        <div class="stat-col"><div class="stat-val">${Number(r.GPplusDNP)||0}</div><div class="stat-key">GP</div></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  setApp(`<div class="fade-in">
+    <button class="back-btn" data-action="back">← Standings</button>
+    <div class="section-header"><div class="section-title">${team}${isMe?' ★':''}</div></div>
+    <div class="totals-bar">
+      <div><div class="totals-label">Season Total</div>
+           <div class="totals-sub">${totalGP} starter games (incl. DNPs)</div></div>
+      <div style="text-align:right"><div class="totals-val">${totalPRA.toLocaleString()}</div>
+           <div class="totals-sub">Starter PRA</div></div>
+    </div>
+    ${cards}
+  </div>`);
+}
+
+// ─── PLAYER GAME LOG ───────────────────────────────────────────────────────────
+function viewPlayerLog(team, player) {
+  pushNav(() => viewPlayerLog(team, player));
+
+  const logs = (gameLog||[])
+    .filter(r => r.Team === team && r.Player === player)
+    .sort((a,b) => a._ymd.localeCompare(b._ymd));
+
+  const totalPRA = logs.filter(r => r.RosterStatus==='Starter')
+                       .reduce((s,r) => s+(Number(r.PRA)||0), 0);
+  const gp = logs.filter(r => r.RosterStatus==='Starter').length;
+
+  const rows = logs.map(r => {
+    const isDNP  = String(r.GameNumber) === 'DNP';
+    const pra    = Number(r.PRA) || 0;
+    const status = r.RosterStatus || '';
+    const sCls   = status==='Starter'?'status-starter':status==='Bench'?'status-bench':'status-inactive';
+    const praCls = isDNP?'pra-dnp':pra>=40?'pra-fire':pra>=28?'pra-hot':'';
+    return `<div class="gl-row ${isDNP?'gl-dnp':''}">
+      <div class="gl-date">${fmtDate(r._ymd)}</div>
+      <div class="gl-mid">
+        <div class="gl-opp">${schoolTag(r.Opponent||'')}</div>
+        <div class="gl-meta">
+          <span class="player-status ${sCls}" style="padding:1px 5px;font-size:9px">${status}</span>
+          ${!isDNP?`<span class="gl-breakdown">${Number(r.Minutes)||0}m · ${Number(r.Points)||0}p ${Number(r.Rebounds)||0}r ${Number(r.Assists)||0}a</span>`:''}
+        </div>
+      </div>
+      <div class="gl-pra ${praCls}">${isDNP?'<span style="font-size:18px;color:var(--red)">DNP</span>':(pra||'–')}</div>
+    </div>`;
+  }).join('');
+
+  setApp(`<div class="fade-in">
+    <button class="back-btn" data-action="back">← Back</button>
+    <div class="section-header">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:16px;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${player}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          ${(()=>{const ps=(playerStats||[]).find(r=>r.Player===player&&r.Team===team);return ps?`${schoolTag(ps.School||'')} <span>${ps.Conference||''}</span>`:'';})()}
+        </div>
+      </div>
+    </div>
+    <div class="totals-bar">
+      <div><div class="totals-label">${team}</div>
+           <div class="totals-sub">${gp} starter games · ${logs.length} total</div></div>
+      <div style="text-align:right"><div class="totals-val">${totalPRA.toLocaleString()}</div>
+           <div class="totals-sub">Starter PRA</div></div>
+    </div>
+    <div class="game-card">${rows||'<div class="empty-state"><p>No games found</p></div>'}</div>
+  </div>`);
+}
+
+// ─── STATS ─────────────────────────────────────────────────────────────────────
+function renderStats() {
+  navStack = [];
+  if (!playerStats) { setApp(loadingHTML()); return; }
+
+  const teamOpts = ['ALL',...allSickos].map(t =>
+    `<option value="${t}" ${statTeamFilter===t?'selected':''}>${t==='ALL'?'All Teams':t}</option>`).join('');
+
+  // Build sorted conference list from playerStats
+  const confs = ['ALL', ...Array.from(new Set((playerStats||[]).map(r=>r.Conference||'').filter(Boolean))).sort()];
+  const confOpts = confs.map(c =>
+    `<option value="${c}" ${statConfFilter===c?'selected':''}>${c==='ALL'?'All Conferences':c}</option>`).join('');
+
+  let rows = statTeamFilter==='ALL' ? [...playerStats] : playerStats.filter(r => r.Team===statTeamFilter);
+  if (statConfFilter !== 'ALL') rows = rows.filter(r => r.Conference === statConfFilter);
+
+  // Sort keys
+  const sortKeys = {
+    total: 'TotalPRA', pts: 'Points', reb: 'Rebounds', ast: 'Assists',
+    prag: 'PRAG', ppg: 'PPG', rpg: 'RPG', apg: 'APG',
+  };
+  const key = sortKeys[statSort] || 'TotalPRA';
+  rows.sort((a,b) => (Number(b[key])||0) - (Number(a[key])||0));
+
+  const isTotals = statView === 'total';
+
+  const cards = rows.slice(0,80).map(r => {
+    const isMe = r.Team === myTeam;
+    const sCls = r.RosterStatus==='Starter'?'status-starter':r.RosterStatus==='Bench'?'status-bench':'status-inactive';
+
+    const cols = isTotals
+      ? `<div class="stat-col"><div class="stat-val" style="color:var(--accent)">${Number(r.TotalPRA||0).toLocaleString()}</div><div class="stat-key">PRA</div></div>
+         <div class="stat-col"><div class="stat-val sm">${Number(r.Points||0).toLocaleString()}</div><div class="stat-key">PTS</div></div>
+         <div class="stat-col"><div class="stat-val sm">${Number(r.Rebounds||0).toLocaleString()}</div><div class="stat-key">REB</div></div>
+         <div class="stat-col"><div class="stat-val sm">${Number(r.Assists||0).toLocaleString()}</div><div class="stat-key">AST</div></div>`
+      : `<div class="stat-col"><div class="stat-val" style="color:var(--accent)">${(Number(r.PRAG)||0).toFixed(1)}</div><div class="stat-key">PRA/G</div></div>
+         <div class="stat-col"><div class="stat-val sm">${(Number(r.PPG)||0).toFixed(1)}</div><div class="stat-key">PPG</div></div>
+         <div class="stat-col"><div class="stat-val sm">${(Number(r.RPG)||0).toFixed(1)}</div><div class="stat-key">RPG</div></div>
+         <div class="stat-col"><div class="stat-val sm">${(Number(r.APG)||0).toFixed(1)}</div><div class="stat-key">APG</div></div>`;
+
+    return `<div class="stats-card ${isMe?'is-my-player':''}" data-action="view-player" data-team="${r.Team}" data-player="${r.Player}">
+      <div class="stat-player-info">
+        <div class="stat-player-name">${r.Player}</div>
+        <div class="stat-player-meta">${schoolTag(r.School||'')} ${r.Conference||''}
+          <span class="player-status ${sCls}" style="padding:1px 5px;font-size:9px;margin-left:4px">${r.RosterStatus||''}</span>
+        </div>
+        <div class="stat-player-meta" style="margin-top:2px">${r.Team} · ${r.GPplusDNP||0}G</div>
+      </div>
+      <div class="stat-nums" style="gap:10px">${cols}</div>
+    </div>`;
+  }).join('');
+
+  // Sort buttons — no Games option, PTS/REB/AST on totals side
+  const totalSorts = [['total','PRA'],['pts','PTS'],['reb','REB'],['ast','AST']];
+  const pergameSorts = [['prag','PRA/G'],['ppg','PPG'],['rpg','RPG'],['apg','APG']];
+  const sorts = isTotals ? totalSorts : pergameSorts;
+  const sortBtns = sorts.map(([s,label]) =>
+    `<button class="sort-btn ${statSort===s?'active':''}" data-action="set-stat-sort" data-sort="${s}">${label}</button>`
+  ).join('');
+
+  setApp(`<div class="fade-in">
+    <div class="section-header"><div class="section-title">PLAYER STATS</div><div class="badge">Full Season</div></div>
+    <div class="filter-row">
+      <select class="filter-select" id="stat-team-select" style="flex:1">${teamOpts}</select>
+      <select class="filter-select" id="stat-conf-select" style="flex:1">${confOpts}</select>
+    </div>
+    <div class="seg-control">
+      <button class="seg-btn ${isTotals?'active':''}" data-action="set-stat-view" data-view="total">Totals</button>
+      <button class="seg-btn ${!isTotals?'active':''}" data-action="set-stat-view" data-view="pergame">Per Game</button>
+    </div>
+    <div class="filter-row" style="margin-bottom:12px">
+      <span class="filter-label">Sort:</span>
+      ${sortBtns}
+    </div>
+    ${cards}
+    ${rows.length>80?'<div class="data-note">Showing top 80 · filter by team to see all</div>':''}
+  </div>`);
+}
+
+// ─── TEAM MODAL ────────────────────────────────────────────────────────────────
+function openTeamModal() {
+  document.getElementById('team-modal-options').innerHTML =
+    ['(None)',...allSickos].map(t => {
+      const sel = (myTeam===t)||(myTeam===null&&t==='(None)');
+      const textColor = darkMode ? '#f0e0c0' : '#2a1c08';
+      const bgColor   = darkMode ? '#342812'  : '#e8c98e';
+      return `<div class="modal-option ${sel?'selected':''}" data-action="select-my-team" data-team="${t}" style="color:${textColor};background:${bgColor}">
+        <span style="pointer-events:none;color:${textColor} !important;font-size:14px;font-weight:700;display:block;flex:1">${t}</span>
+        ${sel?`<span style="pointer-events:none;color:#c45508 !important;font-size:16px;flex-shrink:0">✓</span>`:''}
+      </div>`;
+    }).join('');
+  document.getElementById('team-modal').style.display = 'flex';
+}
+
+function selectMyTeam(t) {
+  myTeam = t==='(None)' ? null : t;
+  myTeam ? localStorage.setItem('sickos_team',myTeam) : localStorage.removeItem('sickos_team');
+  document.getElementById('team-modal').style.display = 'none';
+  scoreFilter = myTeam||'ALL';
+  updateHeaderTeam();
+  renderCurrentTab();
+}
+
+function updateHeaderTeam() {
+  document.getElementById('header-team-name').textContent = myTeam || 'My Team';
+}
+
+// ─── UTILS ─────────────────────────────────────────────────────────────────────
+function setApp(html) { document.getElementById('app').innerHTML = html; }
+function loadingHTML() {
+  return '<div class="loading">Loading<span class="loading-dot">.</span><span class="loading-dot">.</span><span class="loading-dot">.</span></div>';
+}
+
+// ─── DARK MODE ─────────────────────────────────────────────────────────────────
+const modeBtn = document.getElementById('mode-btn');
+let darkMode = localStorage.getItem('sickos_dark') === '1';
+function applyDark() {
+  document.body.classList.toggle('dark', darkMode);
+  modeBtn.textContent = darkMode ? '☀' : '☾';
+}
+applyDark();
+modeBtn.addEventListener('click', () => {
+  darkMode = !darkMode;
+  localStorage.setItem('sickos_dark', darkMode ? '1' : '0');
+  applyDark();
+});
+
+// ─── BOOT ──────────────────────────────────────────────────────────────────────
+updateDateUI();
+init();
+</script>
+</body>
+</html>
