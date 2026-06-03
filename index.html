@@ -803,7 +803,16 @@ document.addEventListener('click', function(e) {
 
   if (action === 'score-filter') { scoreFilter = el.dataset.team; renderScoreboard(); }
   else if (action === 'view-team') { viewTeam(el.dataset.team); }
-  else if (action === 'view-player') { viewPlayerLog(el.dataset.team, el.dataset.player); }
+  else if (action === 'view-player') {
+    // Push current view as the back destination
+    const returnFn = currentTab === 'draft'         ? renderDraft
+                   : currentTab === 'transactions'  ? renderTransactions
+                   : currentTab === 'stats'         ? renderStats
+                   : currentTab === 'scoreboard'    ? renderScoreboard
+                   : renderStandings;
+    navStack = [returnFn];
+    viewPlayerLog(el.dataset.team, el.dataset.player);
+  }
   else if (action === 'back') { navBack(); }
   else if (action === 'set-stat-sort') { statSort = el.dataset.sort; renderStats(); }
   else if (action === 'set-stat-view') { statView = el.dataset.view; statSort = statView === 'total' ? 'total' : 'prag'; renderStats(); }
@@ -957,15 +966,20 @@ async function init() {
   if (drRes.status === 'fulfilled') {
     draftData = [];
     const validRounds = new Set(['1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18','Nov','Dec','Jan','Feb']);
+    let suppCount = 0;
     for (let i = 0; i < drRes.value.length; i++) {
       const r       = drRes.value[i];
       const overall = String(cell(r,0)||'').trim();
       const round   = String(cell(r,1)||'').trim();
+      // Debug: log rows near the supplemental boundary
+      if (i >= 250 && i <= 258) console.log(`Draft gviz row ${i}: overall=${JSON.stringify(cell(r,0))}, round=${JSON.stringify(cell(r,1))}, player=${JSON.stringify(cell(r,4))}`);
       // Skip Month header rows (where overall = 'Overall Pick') and invalid rounds
       if (overall === 'Overall Pick' || overall === '' || !validRounds.has(round)) continue;
       const team   = cell(r,3);
       const player = String(cell(r,4)||'').trim();
       if (!team) continue;
+      const isSupp = ['Nov','Dec','Jan','Feb'].includes(round);
+      if (isSupp) suppCount++;
       draftData.push({
         overall,
         round,
@@ -976,7 +990,7 @@ async function init() {
         conf:   String(cell(r,6)||'').trim(),
       });
     }
-  } else { draftData = []; console.error('Draft error:', drRes.reason); }
+    console.log(`Draft: ${draftData.length} total picks, ${suppCount} supplemental`);
 
   // ── Transaction Log ──
   // Row 0 of sheet ("All","Any",...) is consumed by gviz as column headers
@@ -1144,13 +1158,15 @@ function renderScoreboard(errors) {
         const praCls = isDNP ? '' : pra>=40 ? 'pra-fire' : pra>=28 ? 'pra-hot' : '';
         const teamTag = scoreFilter === 'ALL'
           ? `<span style="font-size:10px;color:var(--muted)"> · ${p.Team||''}</span>` : '';
-        return `<div class="player-row">
-          <div class="player-info">
+        // Only clickable if player is in playerStats (has a team)
+        const sbClickable = p.Team ? `data-action="view-player" data-team="${p.Team}" data-player="${p.Player||''}" style="cursor:pointer"` : '';
+        return `<div class="player-row" ${sbClickable}>
+          <div class="player-info" style="pointer-events:none">
             <div class="player-name">${p.Player||''}${teamTag}</div>
             <div class="player-school">${schoolTag(p.School||'')} ${p.Conference||''}</div>
           </div>
-          <span class="player-status ${sCls}">${status}</span>
-          <div class="pra-block">
+          <span class="player-status ${sCls}" style="pointer-events:none">${status}</span>
+          <div class="pra-block" style="pointer-events:none">
             ${isDNP ? `<div class="pra-big" style="font-size:22px;color:var(--red)">DNP</div>`
                     : `<div class="pra-big ${praCls}">${pra||'–'}</div>
                        ${pra>0?`<div class="pra-breakdown">${Number(p.Points)||0}p ${Number(p.Rebounds)||0}r ${Number(p.Assists)||0}a</div>`:''}`}
@@ -1462,9 +1478,10 @@ function renderDraft() {
     const rows = picks.map(p => {
       const isMe   = p.team === myTeam;
       const isPass = !p.player;
-      return `<div class="draft-row">
+      const draftClickable = !isPass ? `data-action="view-player" data-team="${p.team}" data-player="${p.player}" style="cursor:pointer"` : '';
+      return `<div class="draft-row" ${draftClickable}>
         <div class="draft-pick-num">#${p.overall}</div>
-        <div class="draft-player-info">
+        <div class="draft-player-info" style="pointer-events:none">
           ${isPass
             ? `<div class="draft-player-name draft-pass">— pass —</div>`
             : `<div class="draft-player-name">${p.player}</div>`}
@@ -1472,7 +1489,7 @@ function renderDraft() {
             ${isPass ? '' : `${schoolTag(p.school)} <span>${p.conf||''}</span>`}
           </div>
         </div>
-        <div class="draft-team ${isMe?'is-me':''}">${p.team}</div>
+        <div class="draft-team ${isMe?'is-me':''}" style="pointer-events:none">${p.team}</div>
       </div>`;
     }).join('');
 
@@ -1523,14 +1540,14 @@ function renderTransactions() {
 
   const cards = rows.slice(0,150).map(r => {
     const isMe = r.team === myTeam;
-    return `<div class="txn-row">
-      <div class="txn-date">${fmtDate(r.date)}</div>
-      <div class="txn-info">
+    return `<div class="txn-row" data-action="view-player" data-team="${r.team}" data-player="${r.player}" style="cursor:pointer">
+      <div class="txn-date" style="pointer-events:none">${fmtDate(r.date)}</div>
+      <div class="txn-info" style="pointer-events:none">
         <div class="txn-player">${r.player}</div>
         <div class="txn-meta">${schoolTag(r.school)} <span>${r.conf||''}</span></div>
       </div>
-      <span class="txn-badge ${txnBadgeClass(r.txn)}">${r.txn}</span>
-      <div class="txn-team ${isMe?'is-me':''}">${r.team}</div>
+      <span class="txn-badge ${txnBadgeClass(r.txn)}" style="pointer-events:none">${r.txn}</span>
+      <div class="txn-team ${isMe?'is-me':''}" style="pointer-events:none">${r.team}</div>
     </div>`;
   }).join('');
 
