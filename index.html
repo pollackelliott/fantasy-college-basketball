@@ -106,12 +106,15 @@
   }
   .mode-btn:hover { background: rgba(255,255,255,0.17); }
 
-  .tabs { display: flex; }
+  .tabs { display: flex; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .tabs::-webkit-scrollbar { display: none; }
   .tab {
-    flex: 1; padding: 10px 4px; text-align: center;
+    flex-shrink: 0;
+    padding: 10px 16px; text-align: center;
     font-size: 11px; font-weight: 700; letter-spacing: 0.8px;
     text-transform: uppercase; color: rgba(245,232,208,0.4);
     cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s;
+    white-space: nowrap;
   }
   .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
@@ -266,6 +269,53 @@
 
   .fade-in { animation: fadeIn 0.18s ease; }
   @keyframes fadeIn { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
+
+  /* ── DRAFT BOARD ── */
+  .draft-section-header {
+    font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+    text-transform: uppercase; color: var(--muted);
+    font-family: var(--font-mono);
+    padding: 14px 0 6px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 8px;
+  }
+  .draft-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 14px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 9px;
+    margin-bottom: 6px;
+  }
+  .draft-pick-num {
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--muted); min-width: 28px; flex-shrink: 0;
+  }
+  .draft-player-info { flex: 1; min-width: 0; }
+  .draft-player-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .draft-player-meta { font-size: 10px; color: var(--muted); margin-top: 2px; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+  .draft-team { font-size: 11px; font-weight: 600; color: var(--text); text-align: right; flex-shrink: 0; max-width: 110px; text-align: right; line-height: 1.3; }
+  .draft-team.is-me { color: var(--accent); }
+  .draft-pass { color: var(--muted); font-style: italic; font-size: 12px; }
+
+  /* ── TRANSACTION LOG ── */
+  .txn-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 9px;
+    margin-bottom: 6px;
+  }
+  .txn-date { font-family: var(--font-mono); font-size: 10px; color: var(--muted); min-width: 52px; flex-shrink: 0; }
+  .txn-info { flex: 1; min-width: 0; }
+  .txn-player { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .txn-meta { font-size: 10px; color: var(--muted); margin-top: 2px; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+  .txn-team { font-size: 11px; font-weight: 600; color: var(--text); text-align: right; flex-shrink: 0; max-width: 100px; line-height: 1.3; }
+  .txn-badge {
+    font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 4px;
+    text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap; flex-shrink: 0;
+  }
+  .txn-added   { background: rgba(42,110,42,0.15);  color: var(--green); }
+  .txn-started { background: rgba(42,110,42,0.15);  color: var(--green); }
+  .txn-dropped { background: rgba(184,50,50,0.12);  color: var(--red); }
+  .txn-benched { background: rgba(196,85,8,0.15);   color: var(--accent); }
 </style>
 </head>
 <body>
@@ -284,10 +334,12 @@
       <button class="mode-btn" id="mode-btn">☾</button>
     </div>
   </div>
-  <div class="tabs">
+  <div class="tabs" id="tab-bar">
     <div class="tab active"  data-tab="scoreboard">Scoreboard</div>
     <div class="tab"         data-tab="standings">Standings</div>
     <div class="tab"         data-tab="stats">Stats</div>
+    <div class="tab"         data-tab="draft">Draft</div>
+    <div class="tab"         data-tab="transactions">Transactions</div>
   </div>
 </header>
 
@@ -729,9 +781,15 @@ let navStack       = [];
 let gameLog    = null;
 let standings  = null;
 let playerStats= null;
+let draftData  = null;   // from Draft tab
+let txnData    = null;   // from Transaction Log tab
 let locationMap= {};
 let awayHomeMap= {};
 let allSickos  = [];
+
+// Transaction filters
+let txnTeamFilter = 'ALL';
+let txnTypeFilter = 'ANY';
 
 // ─── EVENT DELEGATION ──────────────────────────────────────────────────────────
 // All dynamic content uses data-action + data-* attributes.
@@ -747,6 +805,8 @@ document.addEventListener('click', function(e) {
   else if (action === 'back') { navBack(); }
   else if (action === 'set-stat-sort') { statSort = el.dataset.sort; renderStats(); }
   else if (action === 'set-stat-view') { statView = el.dataset.view; statSort = statView === 'total' ? 'total' : 'prag'; renderStats(); }
+  else if (action === 'set-txn-team') { txnTeamFilter = el.dataset.team; renderTransactions(); }
+  else if (action === 'set-txn-type') { txnTypeFilter = el.dataset.type; renderTransactions(); }
   else if (action === 'select-my-team') { selectMyTeam(el.dataset.team); }
 });
 
@@ -754,6 +814,8 @@ document.addEventListener('click', function(e) {
 document.addEventListener('change', function(e) {
   if (e.target.id === 'stat-team-select') { statTeamFilter = e.target.value; renderStats(); }
   if (e.target.id === 'stat-conf-select') { statConfFilter = e.target.value; renderStats(); }
+  if (e.target.id === 'txn-team-select')  { txnTeamFilter  = e.target.value; renderTransactions(); }
+  if (e.target.id === 'txn-type-select')  { txnTypeFilter  = e.target.value; renderTransactions(); }
   if (e.target.id === 'date-picker-input') { onPickerChange(e.target.value); }
 });
 
@@ -804,11 +866,13 @@ async function init() {
   setApp(loadingHTML());
 
   const errors = [];
-  const [glRes, stRes, psRes, msRes] = await Promise.allSettled([
+  const [glRes, stRes, psRes, msRes, drRes, txRes] = await Promise.allSettled([
     gvizFetch('Game Log (locked)'),
     gvizFetch('api_standings'),
     gvizFetch('Player Stats (locked)'),
     gvizFetch('master_schedule'),
+    gvizFetch('Draft'),
+    gvizFetch('Transaction Log'),
   ]);
 
   // Game Log (locked)
@@ -881,6 +945,56 @@ async function init() {
     }
   }
 
+  // ── Draft ──
+  // gviz consumes row 0 as cols, data starts at rows[0]
+  // Skip rows where Round === 'Month' (repeated header rows)
+  // Cols: 0=OverallPick, 1=Round, 2=Pick, 3=Team, 4=Player, 5=School, 6=Conference
+  if (drRes.status === 'fulfilled') {
+    draftData = [];
+    for (let i = 0; i < drRes.value.length; i++) {
+      const r     = drRes.value[i];
+      const round = String(cell(r,1)||'').trim();
+      const team  = cell(r,3);
+      if (!round || round === 'Month' || round === 'Round' || !team) continue;
+      draftData.push({
+        overall: cell(r,0),
+        round,
+        pick:    cell(r,2),
+        team:    String(team),
+        player:  String(cell(r,4)||'').trim(),
+        school:  String(cell(r,5)||'').trim(),
+        conf:    String(cell(r,6)||'').trim(),
+      });
+    }
+  } else { draftData = []; console.error('Draft error:', drRes.reason); }
+
+  // ── Transaction Log ──
+  // gviz consumes row 0 ("All","Any",...) as cols
+  // rows[0] = blank row, rows[1] = real header, rows[2+] = data
+  // Cols: 0=Team, 1=Player, 2=School, 3=Conference, 4=Transaction, 5=Type, 6=Date
+  if (txRes.status === 'fulfilled') {
+    txnData = [];
+    for (let i = 2; i < txRes.value.length; i++) {
+      const r      = txRes.value[i];
+      const team   = cell(r,0);
+      const player = cell(r,1);
+      const txn    = cell(r,4);
+      const date   = parseDate(cell(r,6));
+      if (!team || !player || !txn || !date) continue;
+      txnData.push({
+        team:   String(team),
+        player: String(player),
+        school: String(cell(r,2)||''),
+        conf:   String(cell(r,3)||''),
+        txn:    String(txn),
+        type:   String(cell(r,5)||''),
+        date,
+      });
+    }
+    // Sort newest first
+    txnData.sort((a,b) => b.date.localeCompare(a.date));
+  } else { txnData = []; console.error('Transactions error:', txRes.reason); }
+
   scoreFilter = myTeam || 'ALL';
   renderCurrentTab(errors);
 }
@@ -899,6 +1013,10 @@ function switchTab(tab) {
   navStack = [];
   document.querySelectorAll('[data-tab]').forEach(el => {
     el.classList.toggle('active', el.dataset.tab === tab);
+    if (el.dataset.tab === tab) {
+      // Scroll active tab into view smoothly
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
   });
   document.getElementById('date-nav').style.display = tab === 'scoreboard' ? 'flex' : 'none';
   renderCurrentTab();
@@ -906,9 +1024,11 @@ function switchTab(tab) {
 
 function renderCurrentTab(errors) {
   try {
-    if      (currentTab === 'scoreboard') renderScoreboard(errors);
-    else if (currentTab === 'standings')  renderStandings();
-    else                                   renderStats();
+    if      (currentTab === 'scoreboard')   renderScoreboard(errors);
+    else if (currentTab === 'standings')    renderStandings();
+    else if (currentTab === 'stats')        renderStats();
+    else if (currentTab === 'draft')        renderDraft();
+    else if (currentTab === 'transactions') renderTransactions();
   } catch(e) {
     console.error('Render error:', e);
     setApp(`<div class="error-banner">Render error: ${e.message}</div>`);
@@ -1265,7 +1385,113 @@ function updateHeaderTeam() {
   document.getElementById('header-team-name').textContent = myTeam || 'My Team';
 }
 
-// ─── UTILS ─────────────────────────────────────────────────────────────────────
+// ─── DRAFT ─────────────────────────────────────────────────────────────────────
+function renderDraft() {
+  navStack = [];
+  if (!draftData) { setApp(loadingHTML()); return; }
+
+  // Group by round, preserving original order
+  const roundOrder = [];
+  const byRound = {};
+  draftData.forEach(p => {
+    if (!byRound[p.round]) { byRound[p.round] = []; roundOrder.push(p.round); }
+    byRound[p.round].push(p);
+  });
+
+  // Sort each round by pick number
+  Object.values(byRound).forEach(picks =>
+    picks.sort((a,b) => (Number(a.pick)||0) - (Number(b.pick)||0))
+  );
+
+  const sections = roundOrder.map(round => {
+    const isSupp = ['Nov','Dec','Jan','Feb'].includes(String(round));
+    const label  = isSupp ? `${round} Supplemental` : `Round ${round}`;
+
+    const rows = byRound[round].map(p => {
+      const isPass   = !p.player || p.player === '-';
+      const isMe     = p.team === myTeam;
+      const schoolHtml = isPass ? '' : schoolTag(p.school);
+
+      return `<div class="draft-row">
+        <div class="draft-pick-num">#${p.overall||'—'}</div>
+        <div class="draft-player-info">
+          ${isPass
+            ? `<div class="draft-player-name draft-pass">— pass —</div>`
+            : `<div class="draft-player-name">${p.player}</div>`}
+          <div class="draft-player-meta">
+            ${isPass ? '' : `${schoolHtml} <span>${p.conf||''}</span>`}
+          </div>
+        </div>
+        <div class="draft-team ${isMe?'is-me':''}">${p.team}</div>
+      </div>`;
+    }).join('');
+
+    return `<div class="draft-section-header">${label}</div>${rows}`;
+  }).join('');
+
+  setApp(`<div class="fade-in">
+    <div class="section-header">
+      <div class="section-title">Draft Board</div>
+      <div class="badge">${draftData.filter(p=>p.player&&p.player!=='-').length} picks</div>
+    </div>
+    ${sections}
+  </div>`);
+}
+
+// ─── TRANSACTIONS ───────────────────────────────────────────────────────────────
+function renderTransactions() {
+  navStack = [];
+  if (!txnData) { setApp(loadingHTML()); return; }
+
+  const teamOpts = ['ALL',...allSickos].map(t =>
+    `<option value="${t}" ${txnTeamFilter===t?'selected':''}>${t==='ALL'?'All Teams':t}</option>`).join('');
+  const typeOpts = [
+    ['ANY','All Moves'],['Roster Move','Roster Moves'],['Lineup Change','Lineup Changes']
+  ].map(([v,l]) => `<option value="${v}" ${txnTypeFilter===v?'selected':''}>${l}</option>`).join('');
+
+  let rows = [...txnData];
+  if (txnTeamFilter !== 'ALL') rows = rows.filter(r => r.team === txnTeamFilter);
+  if (txnTypeFilter !== 'ANY') rows = rows.filter(r => r.type === txnTypeFilter);
+
+  const txnBadgeClass = t =>
+    t==='Added'   ? 'txn-added'   :
+    t==='Started' ? 'txn-started' :
+    t==='Dropped' ? 'txn-dropped' : 'txn-benched';
+
+  const cards = rows.slice(0,150).map(r => {
+    const isMe = r.team === myTeam;
+    return `<div class="txn-row">
+      <div class="txn-date">${fmtDate(r.date)}</div>
+      <div class="txn-info">
+        <div class="txn-player">${r.player}</div>
+        <div class="txn-meta">${schoolTag(r.school)} <span>${r.conf||''}</span></div>
+      </div>
+      <span class="txn-badge ${txnBadgeClass(r.txn)}">${r.txn}</span>
+      <div class="txn-team ${isMe?'is-me':''}">${r.team}</div>
+    </div>`;
+  }).join('');
+
+  setApp(`<div class="fade-in">
+    <div class="section-header">
+      <div class="section-title">Transactions</div>
+      <div class="badge">${rows.length} moves</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <div class="seg-control" style="flex:1;margin-bottom:0;position:relative">
+        <select class="filter-select" id="txn-team-select" style="width:100%;padding-right:24px">${teamOpts}</select>
+        <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--muted);font-size:10px">▾</span>
+      </div>
+      <div class="seg-control" style="flex:1;margin-bottom:0;position:relative">
+        <select class="filter-select" id="txn-type-select" style="width:100%;padding-right:24px">${typeOpts}</select>
+        <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--muted);font-size:10px">▾</span>
+      </div>
+    </div>
+    ${cards || '<div class="empty-state"><div class="emoji">📋</div><p>No transactions match your filters.</p></div>'}
+    ${rows.length>150?'<div class="data-note">Showing most recent 150 · filter by team to see all</div>':''}
+  </div>`);
+}
+
+
 function setApp(html) { document.getElementById('app').innerHTML = html; }
 function loadingHTML() {
   return '<div class="loading">Loading<span class="loading-dot">.</span><span class="loading-dot">.</span><span class="loading-dot">.</span></div>';
