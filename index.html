@@ -777,7 +777,7 @@ const PS = { Team:0, DraftRound:1, Player:2, School:3, Conference:4, GamesPlayed
              TotalPRA:6, PRAG:7, PPG:10, RPG:11, APG:12,
              Points:14, Rebounds:15, Assists:16,
              GPplusDNP:18, RosterStatus:21 };
-const PS_SKIP = 0;
+const PS_SKIP = 1;
 
 // api_standings: no meta row, rows[] = data
 const ST = { Rank:0, Team:1, TotalPRA:2, PRABehind:3 };
@@ -795,8 +795,7 @@ let faEnabled      = false;   // has user toggled free agents on?
 let faLoaded       = false;   // has the FA data been fetched yet?
 let faLoading      = false;   // fetch in progress?
 let freeAgents     = [];      // aggregated FA player stats
-let faRawLogs      = {};      // athleteId → game log rows
-let psResCache     = null;    // raw psRes rows cached for activeRosterSet building
+let faRawLogs      = {};      // player name → [{_ymd,Opponent,RosterStatus,Minutes,Points,Rebounds,Assists,PRA,GameNumber}]
 // Navigation stack for back button
 let navStack       = [];
 
@@ -904,17 +903,14 @@ async function fetchFreeAgents() {
     const json = JSON.parse(text.replace(/^[^(]+\(/, '').replace(/\);?\s*$/, ''));
     const rows = json.table.rows;
 
-    // Build active roster set directly from raw psResCache (all rows, no PS_SKIP)
-    // so we catch ALL Starter/Bench players including any skipped by PS_SKIP
-    const activeRosterSet = new Set();
-    if (psResCache) {
-      for (let i = 0; i < psResCache.length; i++) {
-        const r  = psResCache[i];
-        const pl = String(cell(r, PS.Player)||'').trim();
-        const st = String(cell(r, PS.RosterStatus)||'').trim();
-        if (pl && (st === 'Starter' || st === 'Bench')) activeRosterSet.add(pl);
-      }
-    }
+    // Build active roster set — only players currently Starter or Bench get excluded
+    // Inactive (dropped) players are allowed a free agent card
+    // Re-rostered players: if they have ANY active row, they're excluded
+    const activeRosterSet = new Set(
+      (playerStats||[])
+        .filter(p => p.RosterStatus === 'Starter' || p.RosterStatus === 'Bench')
+        .map(p => p.Player)
+    );
 
     // Aggregate by player
     const agg = {};
@@ -1080,7 +1076,6 @@ async function init() {
   } else { standings = []; errors.push('Standings failed'); console.error(stRes.reason); }
 
   // Player Stats (locked) — skip 2 rows (meta + header)
-  if (psRes.status === 'fulfilled') psResCache = psRes.value;
   if (psRes.status === 'fulfilled') {
     playerStats = [];
     for (let i = PS_SKIP; i < psRes.value.length; i++) {
@@ -1600,20 +1595,14 @@ function renderStats() {
     </div>`;
   }).join('');
 
-  // FA toggle — count filtered by conference only (not by team)
-  const faConfCount = faLoaded
-    ? (statConfFilter === 'ALL'
-        ? freeAgents.length
-        : freeAgents.filter(p => p.Conference === statConfFilter).length)
-    : 0;
+  // FA toggle
   const faToggleLabel = faLoading ? 'Loading free agents…'
-                      : !faEnabled ? 'Show free agents'
-                      : faLoaded   ? `Free agents (${faConfCount.toLocaleString()} above ${FA_MIN_PRAG} PRA/G)`
-                      :              'Show free agents';
+                      : faLoaded  ? `Free agents (${freeAgents.length.toLocaleString()} above ${FA_MIN_PRAG} PRA/G)`
+                      :             'Show free agents';
   const faToggle = `<div class="fa-toggle-row">
     <span class="fa-toggle-label ${faEnabled?'active':''}">${faToggleLabel}</span>
     <label class="toggle-switch" data-action="toggle-fa">
-      <input type="checkbox" ${faEnabled?'checked':''} style="pointer-events:none" onclick="event.stopPropagation()">
+      <input type="checkbox" ${faEnabled?'checked':''} style="pointer-events:none">
       <div class="toggle-track"></div>
       <div class="toggle-thumb"></div>
     </label>
