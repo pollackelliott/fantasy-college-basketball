@@ -903,9 +903,14 @@ async function fetchFreeAgents() {
     const json = JSON.parse(text.replace(/^[^(]+\(/, '').replace(/\);?\s*$/, ''));
     const rows = json.table.rows;
 
-    // Build roster set — anyone already in playerStats is NOT a free agent
-    const rosterSet = new Set((playerStats||[]).map(p => p.Player));
-    let debugCount = 0;
+    // Build active roster set — only players currently Starter or Bench get excluded
+    // Inactive (dropped) players are allowed a free agent card
+    // Re-rostered players: if they have ANY active row, they're excluded
+    const activeRosterSet = new Set(
+      (playerStats||[])
+        .filter(p => p.RosterStatus === 'Starter' || p.RosterStatus === 'Bench')
+        .map(p => p.Player)
+    );
 
     // Aggregate by player
     const agg = {};
@@ -914,32 +919,31 @@ async function fetchFreeAgents() {
       const player = String(r.c[3]?.v||'').trim();
       const team   = String(r.c[1]?.v||'').trim();
       if (!player) continue;
-      // Skip rostered players — they're already in playerStats
-      if (rosterSet.has(player)) continue;
+      // Skip currently active (Starter/Bench) players — they are not free agents
+      if (activeRosterSet.has(player)) continue;
       // Unrostered = blank team or blank roster status
       if (team && team !== '' && team !== 'null') continue;
 
-      const school = String(r.c[4]?.v||'').trim();
-      const conf   = String(r.c[5]?.v||'').trim();
-      const pra    = Number(r.c[13]?.v)||0;
-      const pts    = Number(r.c[10]?.v)||0;
-      const reb    = Number(r.c[11]?.v)||0;
-      const ast    = Number(r.c[12]?.v)||0;
-      const mins   = Number(r.c[9]?.v)||0;
-      const isDNP    = String(r.c[7]?.v||'') === 'DNP';
-      const athleteId = String(r.c[14]?.v||'').trim() || player;
-      if (debugCount < 5) { console.log('FA row sample:', {player, team, athleteId, rawId: r.c[14]?.v}); debugCount++; } // fallback to name if no ID
+      const school  = String(r.c[4]?.v||'').trim();
+      const conf    = String(r.c[5]?.v||'').trim();
+      const pra     = Number(r.c[13]?.v)||0;
+      const pts     = Number(r.c[10]?.v)||0;
+      const reb     = Number(r.c[11]?.v)||0;
+      const ast     = Number(r.c[12]?.v)||0;
+      const mins    = Number(r.c[9]?.v)||0;
+      const isDNP   = String(r.c[7]?.v||'') === 'DNP';
+      // Key on player+school to uniquely identify same-name players at different schools
+      const aggKey  = player + '|' + school;
 
-      if (!agg[athleteId]) {
-        agg[athleteId] = { Player:player, School:school, Conference:conf,
-                        AthleteId:athleteId,
+      if (!agg[aggKey]) {
+        agg[aggKey] = { Player:player, School:school, Conference:conf,
+                        AggKey:aggKey,
                         Team:'Free Agent', RosterStatus:'Free Agent', DraftRound:'',
                         totalPRA:0, totalPts:0, totalReb:0, totalAst:0,
                         totalMins:0, gp:0, gpAll:0 };
       }
-      // Store raw row for game log view, keyed by athleteId
-      if (!faRawLogs[athleteId]) faRawLogs[athleteId] = [];
-      faRawLogs[athleteId].push({
+      if (!faRawLogs[aggKey]) faRawLogs[aggKey] = [];
+      faRawLogs[aggKey].push({
         _ymd:         parseDate(r.c[2]?.v),
         Opponent:     String(r.c[6]?.v||'').trim(),
         RosterStatus: 'Free Agent',
@@ -953,14 +957,14 @@ async function fetchFreeAgents() {
         Player:       player,
         School:       school,
       });
-      agg[athleteId].gpAll++;
+      agg[aggKey].gpAll++;
       if (!isDNP) {
-        agg[athleteId].gp++;
-        agg[athleteId].totalPRA += pra;
-        agg[athleteId].totalPts += pts;
-        agg[athleteId].totalReb += reb;
-        agg[athleteId].totalAst += ast;
-        agg[athleteId].totalMins += mins;
+        agg[aggKey].gp++;
+        agg[aggKey].totalPRA += pra;
+        agg[aggKey].totalPts += pts;
+        agg[aggKey].totalReb += reb;
+        agg[aggKey].totalAst += ast;
+        agg[aggKey].totalMins += mins;
       }
     }
 
@@ -971,7 +975,7 @@ async function fetchFreeAgents() {
         const prag = p.totalPRA / gp;
         return {
           Player:       p.Player,
-          AthleteId:    p.AthleteId,
+          AggKey:       p.AggKey,
           School:       p.School,
           Conference:   p.Conference,
           Team:         'Free Agent',
@@ -1447,19 +1451,19 @@ function viewPlayerLog(team, playerArg) {
 
   const isFA = team === 'Free Agent';
 
-  // FA cards pass 'fa:athleteId' — decode it
+  // FA cards pass 'fa:player|school' — decode it
   let player    = playerArg;
-  let athleteId = null;
+  let aggKey    = null;
   if (isFA && playerArg.startsWith('fa:')) {
-    athleteId = playerArg.slice(3);
+    aggKey = playerArg.slice(3);
     // Look up display name from freeAgents
-    const faEntry = freeAgents.find(r => r.AthleteId === athleteId);
-    player = faEntry ? faEntry.Player : athleteId;
+    const faEntry = freeAgents.find(r => r.AggKey === aggKey);
+    player = faEntry ? faEntry.Player : aggKey.split('|')[0];
   }
 
-  // For free agents use faRawLogs keyed by athleteId; for rostered use gameLog
+  // For free agents use faRawLogs keyed by aggKey; for rostered use gameLog
   const logs = isFA
-    ? (faRawLogs[athleteId] || faRawLogs[player] || []).sort((a,b) => (a._ymd||'').localeCompare(b._ymd||''))
+    ? (faRawLogs[aggKey] || faRawLogs[player] || []).sort((a,b) => (a._ymd||'').localeCompare(b._ymd||''))
     : (gameLog||[])
         .filter(r => r.Team === team && r.Player === player)
         .sort((a,b) => a._ymd.localeCompare(b._ymd));
@@ -1500,9 +1504,9 @@ function viewPlayerLog(team, playerArg) {
         <div style="font-size:12px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           ${(()=>{
             if (isFA) {
-              const fa = athleteId
-                ? freeAgents.find(r=>r.AthleteId===athleteId)
-                : freeAgents.find(r=>r.Player===player);
+              const fa = aggKey
+                ? freeAgents.find(r => r.AggKey === aggKey)
+                : freeAgents.find(r => r.Player === player);
               return fa ? `${schoolTag(fa.School||'')} <span>${fa.Conference||''}</span>` : '';
             }
             const ps = (playerStats||[]).find(r=>r.Player===player&&r.Team===team);
@@ -1579,7 +1583,7 @@ function renderStats() {
          <div class="stat-col"><div class="stat-val sm">${(Number(r.RPG)||0).toFixed(1)}</div><div class="stat-key">RPG</div></div>
          <div class="stat-col"><div class="stat-val sm">${(Number(r.APG)||0).toFixed(1)}</div><div class="stat-key">APG</div></div>`;
 
-    const dataPlayer = isFA ? 'fa:' + (r.AthleteId||r.Player) : r.Player;
+    const dataPlayer = isFA ? 'fa:' + (r.AggKey||r.Player) : r.Player;
     return `<div class="stats-card ${isMe?'is-my-player':''} ${isFA?'is-fa':''}" data-action="view-player" data-team="${r.Team}" data-player="${dataPlayer}">
       <div class="stat-player-info">
         <div class="stat-player-name">${r.Player}</div>
