@@ -233,7 +233,7 @@
   .toggle-thumb { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; background: #fff; border-radius: 50%; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.25); pointer-events: none; }
   .toggle-switch input:checked ~ .toggle-track { background: var(--accent); }
   .toggle-switch input:checked ~ .toggle-thumb { transform: translateX(18px); }
-  .fa-badge { font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 3px; background: rgba(196,85,8,0.15); color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; margin-left: 4px; }
+  .fa-badge { font-size: 9px; font-weight: 400; padding: 1px 6px; border-radius: 3px; background: rgba(138,101,53,0.15); color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-left: 4px; }
   .tap-hint { font-family: var(--font-mono); font-size: 9px; color: var(--muted); margin-top: 3px; }
 
   /* ── SCHOOL NAMEPLATE ── */
@@ -794,7 +794,8 @@ let statView       = 'total';
 let faEnabled      = false;   // has user toggled free agents on?
 let faLoaded       = false;   // has the FA data been fetched yet?
 let faLoading      = false;   // fetch in progress?
-let freeAgents     = [];      // aggregated FA player stats // 'total' or 'pergame'
+let freeAgents     = [];      // aggregated FA player stats
+let faRawLogs      = {};      // player name → [{_ymd,Opponent,RosterStatus,Minutes,Points,Rebounds,Assists,PRA,GameNumber}]
 // Navigation stack for back button
 let navStack       = [];
 
@@ -932,6 +933,22 @@ async function fetchFreeAgents() {
                         totalPRA:0, totalPts:0, totalReb:0, totalAst:0,
                         totalMins:0, gp:0, gpAll:0 };
       }
+      // Store raw row for game log view
+      if (!faRawLogs[player]) faRawLogs[player] = [];
+      faRawLogs[player].push({
+        _ymd:         parseDate(r.c[2]?.v),
+        Opponent:     String(r.c[6]?.v||'').trim(),
+        RosterStatus: 'Free Agent',
+        GameNumber:   String(r.c[7]?.v||''),
+        Minutes:      Number(r.c[9]?.v)||0,
+        Points:       Number(r.c[10]?.v)||0,
+        Rebounds:     Number(r.c[11]?.v)||0,
+        Assists:      Number(r.c[12]?.v)||0,
+        PRA:          pra,
+        Team:         'Free Agent',
+        Player:       player,
+        School:       school,
+      });
       agg[player].gpAll++;
       if (!isDNP) {
         agg[player].gp++;
@@ -1423,26 +1440,36 @@ function viewTeam(team) {
 function viewPlayerLog(team, player) {
   pushNav(() => viewPlayerLog(team, player));
 
-  const logs = (gameLog||[])
-    .filter(r => r.Team === team && r.Player === player)
-    .sort((a,b) => a._ymd.localeCompare(b._ymd));
+  const isFA = team === 'Free Agent';
 
-  const totalPRA = logs.filter(r => r.RosterStatus==='Starter')
-                       .reduce((s,r) => s+(Number(r.PRA)||0), 0);
-  const gp = logs.filter(r => r.RosterStatus==='Starter').length;
+  // For free agents, use faRawLogs; for rostered players use gameLog
+  const logs = isFA
+    ? (faRawLogs[player] || []).sort((a,b) => (a._ymd||'').localeCompare(b._ymd||''))
+    : (gameLog||[])
+        .filter(r => r.Team === team && r.Player === player)
+        .sort((a,b) => a._ymd.localeCompare(b._ymd));
+
+  const totalPRA = isFA
+    ? logs.reduce((s,r) => s+(Number(r.PRA)||0), 0)
+    : logs.filter(r => r.RosterStatus==='Starter').reduce((s,r) => s+(Number(r.PRA)||0), 0);
+  const gp = isFA
+    ? logs.filter(r => String(r.GameNumber) !== 'DNP').length
+    : logs.filter(r => r.RosterStatus==='Starter').length;
 
   const rows = logs.map(r => {
     const isDNP  = String(r.GameNumber) === 'DNP';
     const pra    = Number(r.PRA) || 0;
     const status = r.RosterStatus || '';
-    const sCls   = status==='Starter'?'status-starter':status==='Bench'?'status-bench':'status-inactive';
+    // Free agents have no roster status — just show stats, no badge
+    const sCls   = status==='Starter'?'status-starter':status==='Bench'?'status-bench':status==='Free Agent'?'status-inactive':'status-inactive';
+    const showBadge = !isFA && status && status !== 'Free Agent';
     const praCls = isDNP?'pra-dnp':pra>=40?'pra-fire':pra>=28?'pra-hot':'';
     return `<div class="gl-row ${isDNP?'gl-dnp':''}">
       <div class="gl-date">${fmtDate(r._ymd)}</div>
       <div class="gl-mid">
         <div class="gl-opp">${schoolTag(r.Opponent||'')}</div>
         <div class="gl-meta">
-          <span class="player-status ${sCls}" style="padding:1px 5px;font-size:9px">${status}</span>
+          ${showBadge?`<span class="player-status ${sCls}" style="padding:1px 5px;font-size:9px">${status}</span>`:''}
           ${!isDNP?`<span class="gl-breakdown">${Number(r.Minutes)||0}m · ${Number(r.Points)||0}p ${Number(r.Rebounds)||0}r ${Number(r.Assists)||0}a</span>`:''}
         </div>
       </div>
@@ -1456,15 +1483,22 @@ function viewPlayerLog(team, player) {
       <div style="flex:1;min-width:0">
         <div style="font-size:16px;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${player}</div>
         <div style="font-size:12px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          ${(()=>{const ps=(playerStats||[]).find(r=>r.Player===player&&r.Team===team);return ps?`${schoolTag(ps.School||'')} <span>${ps.Conference||''}</span>`:'';})()}
+          ${(()=>{
+            if (isFA) {
+              const fa = freeAgents.find(r=>r.Player===player);
+              return fa ? `${schoolTag(fa.School||'')} <span>${fa.Conference||''}</span>` : '';
+            }
+            const ps = (playerStats||[]).find(r=>r.Player===player&&r.Team===team);
+            return ps ? `${schoolTag(ps.School||'')} <span>${ps.Conference||''}</span>` : '';
+          })()}
         </div>
       </div>
     </div>
     <div class="totals-bar">
-      <div><div class="totals-label">${team}</div>
-           <div class="totals-sub">${gp} starter games · ${logs.length} total</div></div>
+      <div><div class="totals-label">${isFA ? 'Free Agent' : team}</div>
+           <div class="totals-sub">${gp} games played · ${logs.length} total</div></div>
       <div style="text-align:right"><div class="totals-val">${totalPRA.toLocaleString()}</div>
-           <div class="totals-sub">Starter PRA</div></div>
+           <div class="totals-sub">${isFA ? 'Total PRA' : 'Starter PRA'}</div></div>
     </div>
     <div class="game-card">${rows||'<div class="empty-state"><p>No games found</p></div>'}</div>
   </div>`);
@@ -1516,7 +1550,7 @@ function renderStats() {
     const statusLabel = isFA ? 'Free Agent' : (r.RosterStatus||'');
     const teamLine    = isFA
       ? `<span class="fa-badge">Free Agent</span>`
-      : `${r.Team} · ${draftLabel(r.DraftRound)}`;
+      : `<span style="font-weight:700;color:var(--text)">${r.Team}</span> · ${draftLabel(r.DraftRound)}`;
 
     const cols = isTotals
       ? `<div class="stat-col"><div class="stat-val" style="color:var(--accent)">${Number(r.TotalPRA||0).toLocaleString()}</div><div class="stat-key">PRA</div></div>
@@ -1542,7 +1576,7 @@ function renderStats() {
 
   // FA toggle
   const faToggleLabel = faLoading ? 'Loading free agents…'
-                      : faLoaded  ? `Free agents (${freeAgents.length} above ${FA_MIN_PRAG} PRA/G)`
+                      : faLoaded  ? `Free agents (${freeAgents.length.toLocaleString()} above ${FA_MIN_PRAG} PRA/G)`
                       :             'Show free agents';
   const faToggle = `<div class="fa-toggle-row">
     <span class="fa-toggle-label ${faEnabled?'active':''}">${faToggleLabel}</span>
