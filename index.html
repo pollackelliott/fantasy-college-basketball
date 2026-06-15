@@ -208,6 +208,7 @@
   .stats-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 11px 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; cursor: pointer; transition: background 0.12s; }
   .stats-card:active { background: var(--surface2); }
   .stats-card.is-my-player { border-left: 3px solid var(--accent); }
+  .stats-card.is-fa { border-left: 3px solid var(--muted); opacity: 0.9; }
   .stat-player-info { flex: 1; min-width: 0; pointer-events: none; }
   .stat-player-name { font-size: 13px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .stat-player-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
@@ -221,6 +222,18 @@
   .seg-control { display: flex; background: var(--surface); border: 1.5px solid var(--border); border-radius: 10px; padding: 3px; margin-bottom: 12px; gap: 2px; }
   .seg-btn { flex: 1; padding: 7px 4px; text-align: center; font-size: 12px; font-weight: 700; color: var(--muted); border-radius: 7px; cursor: pointer; transition: all 0.15s; border: none; background: none; font-family: var(--font-body); }
   .seg-btn.active { background: var(--accent); color: #fff; }
+
+  /* Free Agent toggle */
+  .fa-toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding: 0 2px; }
+  .fa-toggle-label { font-size: 12px; font-weight: 600; color: var(--muted); }
+  .fa-toggle-label.active { color: var(--accent); }
+  .toggle-switch { position: relative; width: 40px; height: 22px; flex-shrink: 0; cursor: pointer; display: inline-block; }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .toggle-track { position: absolute; inset: 0; background: var(--border); border-radius: 22px; transition: background 0.2s; cursor: pointer; }
+  .toggle-thumb { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; background: #fff; border-radius: 50%; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.25); pointer-events: none; }
+  .toggle-switch input:checked ~ .toggle-track { background: var(--accent); }
+  .toggle-switch input:checked ~ .toggle-thumb { transform: translateX(18px); }
+  .fa-badge { font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 3px; background: rgba(196,85,8,0.15); color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; margin-left: 4px; }
   .tap-hint { font-family: var(--font-mono); font-size: 9px; color: var(--muted); margin-top: 3px; }
 
   /* ── SCHOOL NAMEPLATE ── */
@@ -367,6 +380,9 @@
 <script>
 // ─── CONFIG ────────────────────────────────────────────────────────────────────
 const SHEET_ID     = '1SDyVjpmVZuoq3H7J-w4qYrnhE4KgfmPmUPnsmi4JCEg';
+const FA_SHEET_ID  = '1tPTk0c_hPubqvIDTMJY3K7l8p4xowZmrqZIJ9cKuUYc';
+const FA_SHEET_TAB = 'master game log';
+const FA_MIN_PRAG  = 10;   // minimum PRA/G to show as free agent
 const SEASON_START = '2025-11-03';
 const SEASON_END   = '2026-03-15';
 
@@ -774,7 +790,11 @@ let scoreFilter    = null;
 let statSort       = 'total';
 let statTeamFilter = 'ALL';
 let statConfFilter = 'ALL';
-let statView       = 'total'; // 'total' or 'pergame'
+let statView       = 'total';
+let faEnabled      = false;   // has user toggled free agents on?
+let faLoaded       = false;   // has the FA data been fetched yet?
+let faLoading      = false;   // fetch in progress?
+let freeAgents     = [];      // aggregated FA player stats // 'total' or 'pergame'
 // Navigation stack for back button
 let navStack       = [];
 
@@ -816,6 +836,11 @@ document.addEventListener('click', function(e) {
   else if (action === 'back') { navBack(); }
   else if (action === 'set-stat-sort') { statSort = el.dataset.sort; renderStats(); }
   else if (action === 'set-stat-view') { statView = el.dataset.view; statSort = statView === 'total' ? 'total' : 'prag'; renderStats(); }
+  else if (action === 'toggle-fa') {
+    faEnabled = !faEnabled;
+    if (faEnabled && !faLoaded && !faLoading) fetchFreeAgents();
+    else renderStats();
+  }
   else if (action === 'set-txn-team') { txnTeamFilter = el.dataset.team; renderTransactions(); }
   else if (action === 'set-txn-type') { txnTypeFilter = el.dataset.type; renderTransactions(); }
   else if (action === 'jump-round')   { jumpToRound(el.dataset.round); }
@@ -859,6 +884,100 @@ async function gvizFetchRange(sheetName, range) {
   const text = await res.text();
   const json = JSON.parse(text.replace(/^[^(]+\(/, '').replace(/\);?\s*$/, ''));
   return json.table.rows;
+}
+
+// ─── FREE AGENT FETCH ──────────────────────────────────────────────────────────
+// master game log cols (same as Game Log locked + col 14 = athlete_id):
+// 0=GameCode,1=Team,2=Date,3=Player,4=School,5=Conference,6=Opponent,
+// 7=GameNumber,8=RosterStatus,9=Minutes,10=Points,11=Rebounds,12=Assists,13=PRA,14=athlete_id
+async function fetchFreeAgents() {
+  if (faLoaded || faLoading) return;
+  faLoading = true;
+  renderStats(); // re-render to show loading state in toggle
+
+  try {
+    const url  = `https://docs.google.com/spreadsheets/d/${FA_SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(FA_SHEET_TAB)}`;
+    const res  = await fetch(url);
+    const text = await res.text();
+    const json = JSON.parse(text.replace(/^[^(]+\(/, '').replace(/\);?\s*$/, ''));
+    const rows = json.table.rows;
+
+    // Build roster set — anyone already in playerStats is NOT a free agent
+    const rosterSet = new Set((playerStats||[]).map(p => p.Player));
+
+    // Aggregate by player
+    const agg = {};
+    for (let i = 0; i < rows.length; i++) {
+      const r      = rows[i];
+      const player = String(r.c[3]?.v||'').trim();
+      const team   = String(r.c[1]?.v||'').trim();
+      if (!player) continue;
+      // Skip rostered players — they're already in playerStats
+      if (rosterSet.has(player)) continue;
+      // Unrostered = blank team or blank roster status
+      if (team && team !== '' && team !== 'null') continue;
+
+      const school = String(r.c[4]?.v||'').trim();
+      const conf   = String(r.c[5]?.v||'').trim();
+      const pra    = Number(r.c[13]?.v)||0;
+      const pts    = Number(r.c[10]?.v)||0;
+      const reb    = Number(r.c[11]?.v)||0;
+      const ast    = Number(r.c[12]?.v)||0;
+      const mins   = Number(r.c[9]?.v)||0;
+      const isDNP  = String(r.c[7]?.v||'') === 'DNP';
+
+      if (!agg[player]) {
+        agg[player] = { Player:player, School:school, Conference:conf,
+                        Team:'Free Agent', RosterStatus:'Free Agent', DraftRound:'',
+                        totalPRA:0, totalPts:0, totalReb:0, totalAst:0,
+                        totalMins:0, gp:0, gpAll:0 };
+      }
+      agg[player].gpAll++;
+      if (!isDNP) {
+        agg[player].gp++;
+        agg[player].totalPRA += pra;
+        agg[player].totalPts += pts;
+        agg[player].totalReb += reb;
+        agg[player].totalAst += ast;
+        agg[player].totalMins += mins;
+      }
+    }
+
+    // Convert to playerStats-compatible objects, apply threshold
+    freeAgents = Object.values(agg)
+      .map(p => {
+        const gp   = p.gp || 1;
+        const prag = p.totalPRA / gp;
+        return {
+          Player:       p.Player,
+          School:       p.School,
+          Conference:   p.Conference,
+          Team:         'Free Agent',
+          RosterStatus: 'Free Agent',
+          DraftRound:   '',
+          GamesPlayed:  p.gp,
+          GPplusDNP:    p.gpAll,
+          TotalPRA:     p.totalPRA,
+          PRAG:         Math.round(prag * 100) / 100,
+          PPG:          Math.round(p.totalPts / gp * 100) / 100,
+          RPG:          Math.round(p.totalReb / gp * 100) / 100,
+          APG:          Math.round(p.totalAst / gp * 100) / 100,
+          Points:       p.totalPts,
+          Rebounds:     p.totalReb,
+          Assists:      p.totalAst,
+        };
+      })
+      .filter(p => p.PRAG >= FA_MIN_PRAG);
+
+    console.log(`Free agents loaded: ${freeAgents.length} players above ${FA_MIN_PRAG} PRA/G`);
+    faLoaded  = true;
+    faLoading = false;
+    renderStats();
+  } catch(e) {
+    console.error('FA fetch error:', e);
+    faLoading = false;
+    renderStats();
+  }
 }
 
 function cell(row, idx) {
@@ -1356,30 +1475,48 @@ function renderStats() {
   navStack = [];
   if (!playerStats) { setApp(loadingHTML()); return; }
 
-  const teamOpts = ['ALL',...allSickos].map(t =>
+  // Merge free agents if enabled
+  const allPlayers = (faEnabled && faLoaded) ? [...playerStats, ...freeAgents] : [...playerStats];
+
+  // Team dropdown — Free Agent first (after All), then managers sorted by last name
+  const sortedSickos = [...allSickos].sort((a,b) => {
+    const lastA = a.split(' ').pop(), lastB = b.split(' ').pop();
+    if (lastA !== lastB) return lastA.localeCompare(lastB);
+    return a.localeCompare(b);
+  });
+  const teamChoices = ['ALL', ...(faLoaded ? ['Free Agent'] : []), ...sortedSickos];
+  const teamOpts = teamChoices.map(t =>
     `<option value="${t}" ${statTeamFilter===t?'selected':''}>${t==='ALL'?'All Teams':t}</option>`).join('');
 
-  // Build sorted conference list from playerStats
-  const confs = ['ALL', ...Array.from(new Set((playerStats||[]).map(r=>r.Conference||'').filter(Boolean))).sort()];
+  // Conference list from all visible players
+  const confs = ['ALL', ...Array.from(new Set(allPlayers.map(r=>r.Conference||'').filter(Boolean))).sort()];
   const confOpts = confs.map(c =>
     `<option value="${c}" ${statConfFilter===c?'selected':''}>${c==='ALL'?'All Conferences':c}</option>`).join('');
 
-  let rows = statTeamFilter==='ALL' ? [...playerStats] : playerStats.filter(r => r.Team===statTeamFilter);
+  let rows = statTeamFilter==='ALL' ? [...allPlayers] : allPlayers.filter(r => r.Team===statTeamFilter);
   if (statConfFilter !== 'ALL') rows = rows.filter(r => r.Conference === statConfFilter);
 
-  // Sort keys
   const sortKeys = {
-    total: 'TotalPRA', pts: 'Points', reb: 'Rebounds', ast: 'Assists',
-    prag: 'PRAG', ppg: 'PPG', rpg: 'RPG', apg: 'APG',
+    total:'TotalPRA', pts:'Points', reb:'Rebounds', ast:'Assists',
+    prag:'PRAG', ppg:'PPG', rpg:'RPG', apg:'APG',
   };
   const key = sortKeys[statSort] || 'TotalPRA';
   rows.sort((a,b) => (Number(b[key])||0) - (Number(a[key])||0));
 
   const isTotals = statView === 'total';
+  const limit    = faEnabled ? 120 : 80;
 
-  const cards = rows.slice(0,80).map(r => {
+  const cards = rows.slice(0, limit).map(r => {
     const isMe = r.Team === myTeam;
-    const sCls = r.RosterStatus==='Starter'?'status-starter':r.RosterStatus==='Bench'?'status-bench':'status-inactive';
+    const isFA = r.Team === 'Free Agent';
+    const sCls = isFA                   ? 'status-inactive'
+               : r.RosterStatus==='Starter' ? 'status-starter'
+               : r.RosterStatus==='Bench'   ? 'status-bench'
+               :                              'status-inactive';
+    const statusLabel = isFA ? 'Free Agent' : (r.RosterStatus||'');
+    const teamLine    = isFA
+      ? `<span class="fa-badge">Free Agent</span>`
+      : `${r.Team} · ${draftLabel(r.DraftRound)}`;
 
     const cols = isTotals
       ? `<div class="stat-col"><div class="stat-val" style="color:var(--accent)">${Number(r.TotalPRA||0).toLocaleString()}</div><div class="stat-key">PRA</div></div>
@@ -1391,19 +1528,31 @@ function renderStats() {
          <div class="stat-col"><div class="stat-val sm">${(Number(r.RPG)||0).toFixed(1)}</div><div class="stat-key">RPG</div></div>
          <div class="stat-col"><div class="stat-val sm">${(Number(r.APG)||0).toFixed(1)}</div><div class="stat-key">APG</div></div>`;
 
-    return `<div class="stats-card ${isMe?'is-my-player':''}" data-action="view-player" data-team="${r.Team}" data-player="${r.Player}">
+    return `<div class="stats-card ${isMe?'is-my-player':''} ${isFA?'is-fa':''}" data-action="view-player" data-team="${r.Team}" data-player="${r.Player}">
       <div class="stat-player-info">
         <div class="stat-player-name">${r.Player}</div>
         <div class="stat-player-meta">${schoolTag(r.School||'')} ${r.Conference||''}
-          <span class="player-status ${sCls}" style="padding:1px 5px;font-size:9px;margin-left:4px">${r.RosterStatus||''}</span>
+          ${!isFA ? `<span class="player-status ${sCls}" style="padding:1px 5px;font-size:9px;margin-left:4px">${statusLabel}</span>` : ''}
         </div>
-        <div class="stat-player-meta" style="margin-top:2px">${r.Team} · ${draftLabel(r.DraftRound)}</div>
+        <div class="stat-player-meta" style="margin-top:2px">${teamLine}</div>
       </div>
       <div class="stat-nums" style="gap:10px">${cols}</div>
     </div>`;
   }).join('');
 
-  // Sort buttons — no Games option, PTS/REB/AST on totals side
+  // FA toggle
+  const faToggleLabel = faLoading ? 'Loading free agents…'
+                      : faLoaded  ? `Free agents (${freeAgents.length} above ${FA_MIN_PRAG} PRA/G)`
+                      :             'Show free agents';
+  const faToggle = `<div class="fa-toggle-row">
+    <span class="fa-toggle-label ${faEnabled?'active':''}">${faToggleLabel}</span>
+    <label class="toggle-switch" data-action="toggle-fa">
+      <input type="checkbox" ${faEnabled?'checked':''} style="pointer-events:none">
+      <div class="toggle-track"></div>
+      <div class="toggle-thumb"></div>
+    </label>
+  </div>`;
+
   const totalSorts = [['total','PRA'],['pts','PTS'],['reb','REB'],['ast','AST']];
   const pergameSorts = [['prag','PRA/G'],['ppg','PPG'],['rpg','RPG'],['apg','APG']];
   const sorts = isTotals ? totalSorts : pergameSorts;
@@ -1412,7 +1561,11 @@ function renderStats() {
   ).join('');
 
   setApp(`<div class="fade-in">
-    <div class="section-header"><div class="section-title">PLAYER STATS</div><div class="badge">Full Season</div></div>
+    <div class="section-header">
+      <div class="section-title">PLAYER STATS</div>
+      <div class="badge">Full Season</div>
+    </div>
+    ${faToggle}
     <div style="display:flex;gap:8px;margin-bottom:8px">
       <div class="seg-control" style="flex:1;margin-bottom:0;position:relative">
         <select class="filter-select" id="stat-team-select" style="width:100%;padding-right:24px">${teamOpts}</select>
@@ -1432,7 +1585,7 @@ function renderStats() {
       ${sortBtns}
     </div>
     ${cards}
-    ${rows.length>80?'<div class="data-note">Showing top 80 · filter by team to see all</div>':''}
+    ${rows.length>limit?`<div class="data-note">Showing top ${limit} · filter by team or conference to see more</div>`:''}
   </div>`);
 }
 
