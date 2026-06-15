@@ -1613,7 +1613,7 @@ function renderStats() {
   const faToggle = `<div class="fa-toggle-row">
     <span class="fa-toggle-label ${faEnabled?'active':''}">${faToggleLabel}</span>
     <label class="toggle-switch" data-action="toggle-fa">
-      <input type="checkbox" ${faEnabled?'checked':''} style="pointer-events:none">
+      <input type="checkbox" ${faEnabled?'checked':''} style="pointer-events:none" onclick="event.stopPropagation()">
       <div class="toggle-track"></div>
       <div class="toggle-thumb"></div>
     </label>
