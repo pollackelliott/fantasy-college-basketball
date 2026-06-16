@@ -142,7 +142,7 @@
   /* ── MAIN ── */
   main { padding: 16px; position: relative; z-index: 1; }
 
-  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .section-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
   .section-title { font-size: 16px; font-weight: 800; color: var(--text); text-transform: uppercase; letter-spacing: 0.5px; }
   .badge { font-family: var(--font-mono); font-size: 11px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 3px 8px; color: var(--muted); }
 
@@ -178,6 +178,7 @@
   .status-bench    { background: rgba(196,85,8,0.15);  color: var(--accent); }
   .status-dnp      { background: rgba(184,50,50,0.12); color: var(--red); }
   .status-inactive { background: rgba(138,101,53,0.15); color: var(--muted); }
+  .status-fa       { background: rgba(138,101,53,0.15); color: var(--muted); }
 
   .pra-block { text-align: right; min-width: 52px; flex-shrink: 0; }
   .pra-big { font-size: 28px; font-weight: 900; line-height: 1; color: var(--text); }
@@ -201,8 +202,8 @@
   /* ── STATS ── */
   .filter-row { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
   .filter-label { font-family: var(--font-mono); font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; white-space: nowrap; }
-  .filter-select { flex: 1; background: none; border: none; border-radius: 7px; color: var(--muted); font-family: var(--font-body); font-size: 12px; font-weight: 700; padding: 7px 4px; text-align: center; appearance: none; -webkit-appearance: none; cursor: pointer; }
-  .sort-btn { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--muted); font-size: 12px; font-weight: 600; padding: 7px 12px; cursor: pointer; white-space: nowrap; font-family: var(--font-body); transition: all 0.15s; }
+  .filter-select { flex: 1; background: none; border: none; border-radius: 7px; color: var(--muted); font-family: var(--font-body); font-size: 11px; font-weight: 700; padding: 5px 4px; text-align: center; appearance: none; -webkit-appearance: none; cursor: pointer; }
+  .sort-btn { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--muted); font-size: 11px; font-weight: 600; padding: 5px 10px; cursor: pointer; white-space: nowrap; font-family: var(--font-body); transition: all 0.15s; }
   .sort-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
   .stats-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 11px 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; cursor: pointer; transition: background 0.12s; }
@@ -219,8 +220,8 @@
   .stat-key { font-family: var(--font-mono); font-size: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
 
   /* Segmented control */
-  .seg-control { display: flex; background: var(--surface); border: 1.5px solid var(--border); border-radius: 10px; padding: 3px; margin-bottom: 12px; gap: 2px; }
-  .seg-btn { flex: 1; padding: 7px 4px; text-align: center; font-size: 12px; font-weight: 700; color: var(--muted); border-radius: 7px; cursor: pointer; transition: all 0.15s; border: none; background: none; font-family: var(--font-body); }
+  .seg-control { display: flex; background: var(--surface); border: 1.5px solid var(--border); border-radius: 10px; padding: 2px; margin-bottom: 10px; gap: 2px; }
+  .seg-btn { flex: 1; padding: 5px 4px; text-align: center; font-size: 11px; font-weight: 700; color: var(--muted); border-radius: 7px; cursor: pointer; transition: all 0.15s; border: none; background: none; font-family: var(--font-body); }
   .seg-btn.active { background: var(--accent); color: #fff; }
 
   /* Free Agent toggle */
@@ -348,15 +349,15 @@
     </div>
   </div>
   <div class="tabs" id="tab-bar">
-    <div class="tab active"  data-tab="scoreboard">Scoreboard</div>
-    <div class="tab"         data-tab="standings">Standings</div>
+    <div class="tab active"  data-tab="standings">Standings</div>
+    <div class="tab"         data-tab="scoreboard">Scoreboard</div>
     <div class="tab"         data-tab="stats">Stats</div>
     <div class="tab"         data-tab="draft">Draft</div>
     <div class="tab"         data-tab="transactions">Transactions</div>
   </div>
 </header>
 
-<div class="date-nav" id="date-nav">
+<div class="date-nav" id="date-nav" style="display:none">
   <button class="date-arrow" id="date-prev">‹</button>
   <label class="date-display" for="date-picker-input" style="cursor:pointer;flex:1;text-align:center">
     <div class="date-main" id="date-label">Mar 15, 2026</div>
@@ -784,7 +785,7 @@ const ST = { Rank:0, Team:1, TotalPRA:2, PRABehind:3 };
 
 // ─── STATE ─────────────────────────────────────────────────────────────────────
 let myTeam         = localStorage.getItem('sickos_team') || null;
-let currentTab     = 'scoreboard';
+let currentTab     = 'standings';
 let viewDate       = SEASON_END;
 let scoreFilter    = null;
 let statSort       = 'total';
@@ -795,6 +796,7 @@ let statsScope     = 'sicko';  // 'sicko' = rostered Sicko games only, 'all' = f
 let faEnabled      = false;   // has user toggled free agents on?
 let faLoaded       = false;   // has the FA data been fetched yet?
 let faLoading      = false;   // fetch in progress?
+let faLoadingSource= 'free agents'; // label for the current master-log fetch
 let freeAgents     = [];      // aggregated FA player stats
 let allSeasonStats = [];      // full-season stats for every player in the master game log
 let allSeasonRawLogs = {};    // player|school -> full-season game log rows
@@ -843,12 +845,12 @@ document.addEventListener('click', function(e) {
   else if (action === 'set-stat-view') { statView = el.dataset.view; statSort = statView === 'total' ? 'total' : 'prag'; renderStats(); }
   else if (action === 'set-stats-scope') {
     statsScope = el.dataset.scope;
-    if (statsScope === 'all' && !faLoaded && !faLoading) fetchFreeAgents();
+    if (statsScope === 'all' && !faLoaded && !faLoading) { faLoadingSource = 'all games'; fetchFreeAgents(); }
     else renderStats();
   }
   else if (action === 'toggle-fa') {
     faEnabled = !faEnabled;
-    if (faEnabled && !faLoaded && !faLoading) fetchFreeAgents();
+    if (faEnabled && !faLoaded && !faLoading) { faLoadingSource = 'free agents'; fetchFreeAgents(); }
     else renderStats();
   }
   else if (action === 'set-txn-team') { txnTeamFilter = el.dataset.team; renderTransactions(); }
@@ -924,6 +926,20 @@ async function fetchFreeAgents() {
       }
     }
 
+    // Build a per-game Sickos status lookup so the All Games player log can show
+    // Starter/Bench on rostered dates and Free Agent on unrostered dates.
+    const sickoStatusMap = new Map();
+    const statusKey = (player, school, ymd, opponent) =>
+      [String(player||'').trim(), String(school||'').trim(), String(ymd||'').trim(), String(opponent||'').trim()].join('|');
+    (gameLog||[]).forEach(g => {
+      const status = String(g.RosterStatus||'').trim();
+      if (!g.Player || !g.School || !g._ymd || !status) return;
+      const value = { status, team: g.Team || 'All Games' };
+      sickoStatusMap.set(statusKey(g.Player, g.School, g._ymd, g.Opponent), value);
+      // Fallback for cases where the opponent text differs between sheets.
+      sickoStatusMap.set(statusKey(g.Player, g.School, g._ymd, ''), value);
+    });
+
     // Aggregate by player. We build two datasets from the same master log:
     // 1) allAgg: every player, every game, for the Stats page's "All Games" mode
     // 2) agg: free agents only, preserving the existing free-agent toggle behavior
@@ -977,10 +993,18 @@ async function fetchFreeAgents() {
       const ast     = Number(r.c[12]?.v)||0;
       const mins    = Number(r.c[9]?.v)||0;
       const isDNP   = String(r.c[7]?.v||'') === 'DNP';
+      const ymd     = parseDate(r.c[2]?.v);
+      const opponent = String(r.c[6]?.v||'').trim();
+      const masterStatus = String(r.c[8]?.v||'').trim();
+      const sickoMatch = sickoStatusMap.get(statusKey(player, school, ymd, opponent))
+                      || sickoStatusMap.get(statusKey(player, school, ymd, ''));
+      const dayStatus = sickoMatch?.status
+                     || (masterStatus === 'Starter' || masterStatus === 'Bench' ? masterStatus : 'Free Agent');
+      const dayTeam = sickoMatch?.team || (dayStatus === 'Free Agent' ? 'Free Agent' : 'All Games');
       // Key on player+school to uniquely identify same-name players at different schools
       const aggKey  = player + '|' + school;
 
-      addToAgg(allAgg, allSeasonRawLogs, aggKey, player, school, conf, 'All Games', 'All Games', r, pra, pts, reb, ast, mins, isDNP);
+      addToAgg(allAgg, allSeasonRawLogs, aggKey, player, school, conf, dayTeam, dayStatus, r, pra, pts, reb, ast, mins, isDNP);
 
       // Existing FA behavior: skip currently active Starter/Bench players
       if (activeRosterSet.has(player)) continue;
@@ -1509,9 +1533,10 @@ function viewPlayerLog(team, playerArg) {
     const isDNP  = String(r.GameNumber) === 'DNP';
     const pra    = Number(r.PRA) || 0;
     const status = r.RosterStatus || '';
-    // Free agents have no roster status — just show stats, no badge
-    const sCls   = status==='Starter'?'status-starter':status==='Bench'?'status-bench':status==='Free Agent'?'status-inactive':'status-inactive';
-    const showBadge = !isFA && status && status !== 'Free Agent';
+    // In All Games mode, show the per-game roster status: Starter/Bench when
+    // that game is in the Sickos log; otherwise show Free Agent in grey.
+    const sCls   = status==='Starter'?'status-starter':status==='Bench'?'status-bench':status==='Free Agent'?'status-fa':'status-inactive';
+    const showBadge = isAllGamesLog ? !!status : (!isFA && status && status !== 'Free Agent');
     const praCls = isDNP?'pra-dnp':pra>=40?'pra-fire':pra>=28?'pra-hot':'';
     return `<div class="gl-row ${isDNP?'gl-dnp':''}">
       <div class="gl-date">${fmtDate(r._ymd)}</div>
@@ -1664,7 +1689,7 @@ function renderStats() {
         ? freeAgents.length
         : freeAgents.filter(p => p.Conference === statConfFilter).length)
     : 0;
-  const faToggleLabel = faLoading ? 'Loading free agents…'
+  const faToggleLabel = faLoading ? (faLoadingSource === 'all games' ? 'Loading all games…' : 'Loading free agents…')
                       : !faEnabled ? 'Show free agents'
                       : faLoaded   ? `Free agents (${faConfCount.toLocaleString()} above ${FA_MIN_PRAG} PRA/G)`
                       :              'Show free agents';
@@ -1687,9 +1712,9 @@ function renderStats() {
   setApp(`<div class="fade-in">
     <div class="section-header">
       <div class="section-title">PLAYER STATS</div>
-      <div class="seg-control" style="margin-bottom:0;width:190px;padding:2px">
-        <button class="seg-btn ${statsScope==='sicko'?'active':''}" style="font-size:10px;padding:5px 3px" data-action="set-stats-scope" data-scope="sicko">Sicko Games Only</button>
-        <button class="seg-btn ${statsScope==='all'?'active':''}" style="font-size:10px;padding:5px 3px" data-action="set-stats-scope" data-scope="all">All Games</button>
+      <div class="seg-control" style="margin-bottom:0;width:238px;padding:2px;flex-shrink:0">
+        <button class="seg-btn ${statsScope==='sicko'?'active':''}" style="font-size:9px;padding:4px 3px;white-space:nowrap" data-action="set-stats-scope" data-scope="sicko">Sicko Games Only</button>
+        <button class="seg-btn ${statsScope==='all'?'active':''}" style="font-size:9px;padding:4px 3px;white-space:nowrap" data-action="set-stats-scope" data-scope="all">All Games</button>
       </div>
     </div>
     ${faToggle}
