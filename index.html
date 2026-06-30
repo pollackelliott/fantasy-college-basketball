@@ -260,7 +260,11 @@
   /* ── EMPTY / LOADING ── */
   .empty-state { text-align: center; padding: 48px 24px; color: var(--muted); }
   .empty-state .emoji { font-size: 40px; margin-bottom: 12px; }
+  .empty-title { font-size: 15px; font-weight: 800; color: var(--text); margin-bottom: 6px; }
   .empty-state p { font-size: 14px; line-height: 1.6; }
+  .state-action { margin-top: 14px; }
+  .state-btn { background: var(--accent); border: 1px solid var(--accent); border-radius: 8px; color: #fff; font-family: var(--font-body); font-size: 12px; font-weight: 800; padding: 8px 14px; cursor: pointer; }
+  .state-subtle { font-size: 12px; color: var(--muted); }
   .loading { text-align: center; padding: 60px 20px; color: var(--muted); font-family: var(--font-mono); font-size: 13px; letter-spacing: 1px; }
   .loading-dot { display: inline-block; animation: blink 1.2s infinite; }
   .loading-dot:nth-child(2) { animation-delay: 0.2s; }
@@ -350,6 +354,7 @@
   </div>
   <div class="tabs" id="tab-bar">
     <div class="tab active"  data-tab="standings">Standings</div>
+    <div class="tab"         data-tab="roster">Roster</div>
     <div class="tab"         data-tab="scoreboard">Scoreboard</div>
     <div class="tab"         data-tab="stats">Stats</div>
     <div class="tab"         data-tab="draft">Draft</div>
@@ -756,12 +761,56 @@ const SCHOOL_COLORS = {
   'Youngstown State': ['#C8102E','#FFFFFF'],
 };
 
+// Render helpers keep sheet-fed values from becoming markup.
+function esc(v) {
+  return String(v ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[ch]));
+}
+
+function attr(v) {
+  return esc(v).replace(/`/g, '&#96;');
+}
+
+function num(v) {
+  return Number(v || 0);
+}
+
+function fmtInt(v) {
+  return num(v).toLocaleString();
+}
+
+function emptyStateHTML(icon, title, body, actionLabel, action) {
+  const iconText = String(icon || '');
+  const iconBlock = iconText && iconText.length <= 2
+    ? `<div class="emoji">${esc(iconText)}</div>`
+    : '';
+  const button = actionLabel && action
+    ? `<div class="state-action"><button class="state-btn" data-action="${attr(action)}">${esc(actionLabel)}</button></div>`
+    : '';
+  return `<div class="empty-state">
+    ${iconBlock}
+    <div class="empty-title">${esc(title)}</div>
+    <p>${body}</p>
+    ${button}
+  </div>`;
+}
+
+function errorBannerHTML(errors) {
+  if (!errors || !errors.length) return '';
+  return `<div class="error-banner">
+    ${esc(errors.join(' · '))}
+    <div class="state-action"><button class="state-btn" data-action="retry-init">Retry data load</button></div>
+  </div>`;
+}
+
 // Returns a jersey-nameplate styled span for a school name
 function schoolTag(school) {
   const colors = SCHOOL_COLORS[school];
-  if (!colors) return `<span class="school-tag">${school}</span>`;
+  const label = esc(school);
+  if (!colors) return `<span class="school-tag">${label}</span>`;
   const [bg, text] = colors;
-  return `<span class="school-tag" style="background:${bg};color:${text}">${school}</span>`;
+  return `<span class="school-tag" style="background:${attr(bg)};color:${attr(text)}">${label}</span>`;
 }
 
 // ─── COLUMN MAPS (positional, bypasses gviz label mangling) ───────────────────
@@ -793,6 +842,7 @@ let statTeamFilter = 'ALL';
 let statConfFilter = 'ALL';
 let statView       = 'total';
 let statsScope     = 'sicko';  // 'sicko' = rostered Sicko games only, 'all' = full college season stats
+let rosterTeamFilter = myTeam || null;
 let faEnabled      = false;   // has user toggled free agents on?
 let faLoaded       = false;   // has the FA data been fetched yet?
 let faLoading      = false;   // fetch in progress?
@@ -813,12 +863,60 @@ let txnData    = null;   // from Transaction Log tab
 let locationMap= {};
 let awayHomeMap= {};
 let allSickos  = [];
+let loadErrors = [];
+let indexes = emptyIndexes();
 
 // Transaction filters
 let txnTeamFilter = 'ALL';
 let txnTypeFilter = 'ANY';
 let draftTeamFilter = 'ALL';
 let draftConfFilter = 'ALL';
+
+function emptyIndexes() {
+  return {
+    gameLogByDate: new Map(),
+    playerLogsByTeamPlayer: new Map(),
+    playersByTeam: new Map(),
+    standingsByTeam: new Map(),
+    transactionsByTeam: new Map(),
+    draftCountsByRound: new Map(),
+    draftRoundOrder: [],
+  };
+}
+
+function mapListPush(map, key, value) {
+  if (!map.has(key)) map.set(key, []);
+  map.get(key).push(value);
+}
+
+function teamPlayerKey(team, player) {
+  return `${String(team ?? '').trim()}||${String(player ?? '').trim()}`;
+}
+
+function buildIndexes() {
+  indexes = emptyIndexes();
+  (gameLog || []).forEach(row => {
+    mapListPush(indexes.gameLogByDate, row._ymd, row);
+    mapListPush(indexes.playerLogsByTeamPlayer, teamPlayerKey(row.Team, row.Player), row);
+  });
+  indexes.playerLogsByTeamPlayer.forEach(rows => rows.sort((a,b) => a._ymd.localeCompare(b._ymd)));
+
+  (playerStats || []).forEach(row => mapListPush(indexes.playersByTeam, row.Team, row));
+  indexes.playersByTeam.forEach(rows => rows.sort((a,b) => (Number(b.TotalPRA)||0)-(Number(a.TotalPRA)||0)));
+
+  (standings || []).forEach(row => indexes.standingsByTeam.set(row.Team, row));
+
+  (txnData || []).forEach(row => mapListPush(indexes.transactionsByTeam, row.team, row));
+
+  const seenRounds = new Set();
+  (draftData || []).forEach(row => {
+    if (!seenRounds.has(row.round)) {
+      seenRounds.add(row.round);
+      indexes.draftRoundOrder.push(row.round);
+    }
+    indexes.draftCountsByRound.set(row.round, (indexes.draftCountsByRound.get(row.round) || 0) + 1);
+  });
+}
 
 // ─── EVENT DELEGATION ──────────────────────────────────────────────────────────
 // All dynamic content uses data-action + data-* attributes.
@@ -830,10 +928,12 @@ document.addEventListener('click', function(e) {
 
   if (action === 'score-filter') { scoreFilter = el.dataset.team; renderScoreboard(); }
   else if (action === 'view-team') { viewTeam(el.dataset.team); }
+  else if (action === 'retry-init') { init(); }
   else if (action === 'view-player') {
     // Push current view as the back destination
     const returnFn = currentTab === 'draft'         ? renderDraft
                    : currentTab === 'transactions'  ? renderTransactions
+                   : currentTab === 'roster'        ? renderRoster
                    : currentTab === 'stats'         ? renderStats
                    : currentTab === 'scoreboard'    ? renderScoreboard
                    : renderStandings;
@@ -863,6 +963,7 @@ document.addEventListener('click', function(e) {
 document.addEventListener('change', function(e) {
   if (e.target.id === 'stat-team-select') { statTeamFilter = e.target.value; renderStats(); }
   if (e.target.id === 'stat-conf-select') { statConfFilter = e.target.value; renderStats(); }
+  if (e.target.id === 'roster-team-select') { rosterTeamFilter = e.target.value; renderRoster(); }
   if (e.target.id === 'txn-team-select')  { txnTeamFilter  = e.target.value; renderTransactions(); }
   if (e.target.id === 'txn-type-select')  { txnTypeFilter  = e.target.value; renderTransactions(); }
   if (e.target.id === 'draft-team-select') { draftTeamFilter = e.target.value; renderDraft(); }
@@ -1078,6 +1179,8 @@ function fmtDate(ymd) {
 async function init() {
   updateHeaderTeam();
   setApp(loadingHTML());
+  loadErrors = [];
+  indexes = emptyIndexes();
 
   const errors = [];
   const [glRes, stRes, psRes, msRes, drRes, txRes, drSuppRes] = await Promise.allSettled([
@@ -1267,8 +1370,13 @@ async function init() {
     console.log(`Loaded ${txnData.length} transactions (dataStart=${dataStart})`);
   } else { txnData = []; console.error('Transactions error:', txRes.reason); }
 
+  loadErrors = errors;
+  rosterTeamFilter = allSickos.includes(rosterTeamFilter) ? rosterTeamFilter
+                   : allSickos.includes(myTeam)           ? myTeam
+                   : allSickos[0] || null;
+  buildIndexes();
   scoreFilter = myTeam || 'ALL';
-  renderCurrentTab(errors);
+  renderCurrentTab(loadErrors);
 }
 
 // ─── NAVIGATION ────────────────────────────────────────────────────────────────
@@ -1295,15 +1403,17 @@ function switchTab(tab) {
 }
 
 function renderCurrentTab(errors) {
+  errors = errors || loadErrors;
   try {
     if      (currentTab === 'scoreboard')   renderScoreboard(errors);
     else if (currentTab === 'standings')    renderStandings();
+    else if (currentTab === 'roster')       renderRoster();
     else if (currentTab === 'stats')        renderStats();
     else if (currentTab === 'draft')        renderDraft();
     else if (currentTab === 'transactions') renderTransactions();
   } catch(e) {
     console.error('Render error:', e);
-    setApp(`<div class="error-banner">Render error: ${e.message}</div>`);
+    setApp(`<div class="error-banner">Render error: ${esc(e.message)}</div>`);
   }
 }
 
@@ -1341,11 +1451,11 @@ function renderScoreboard(errors) {
   updateDateUI();
   if (!gameLog) { setApp(loadingHTML()); return; }
 
-  const dayRows  = gameLog.filter(r => r._ymd === viewDate);
+  const dayRows  = indexes.gameLogByDate.get(viewDate) || [];
   const chips    = ['ALL', ...allSickos].map(t => {
     const label = t === 'ALL' ? 'All' : t;
     const active = scoreFilter === t ? 'active' : '';
-    return `<div class="team-chip ${active}" data-action="score-filter" data-team="${t}">${label}</div>`;
+    return `<div class="team-chip ${active}" data-action="score-filter" data-team="${attr(t)}">${esc(label)}</div>`;
   }).join('');
 
   const filtered    = scoreFilter === 'ALL' ? dayRows : dayRows.filter(r => r.Team === scoreFilter);
@@ -1371,10 +1481,13 @@ function renderScoreboard(errors) {
   const matchupList = Object.values(games);
   if (!matchupList.length) {
     const anyToday = dayRows.length;
-    cards = `<div class="empty-state"><div class="emoji">${anyToday ? '🔍' : '📅'}</div>
-      <p>${anyToday ? `No players from <strong>${scoreFilter}</strong><br>played on this date.`
-                    : 'No games were played on this date.'}
-      <br><span style="font-size:12px;color:var(--muted)">Use ‹ › to find a game day.</span></p></div>`;
+    cards = emptyStateHTML(
+      anyToday ? 'Search' : 'Calendar',
+      anyToday ? 'No matching players' : 'No games on this date',
+      `${anyToday ? `No players from <strong>${esc(scoreFilter)}</strong><br>played on this date.`
+                  : 'No games were played on this date.'}
+       <br><span class="state-subtle">Use the date arrows to find a game day.</span>`
+    );
   } else {
     matchupList.forEach(g => {
       g.players.sort((a, b) => {
@@ -1389,17 +1502,17 @@ function renderScoreboard(errors) {
         const sCls   = isDNP ? 'status-dnp' : status==='Starter' ? 'status-starter' : status==='Bench' ? 'status-bench' : 'status-inactive';
         const praCls = isDNP ? '' : pra>=40 ? 'pra-fire' : pra>=28 ? 'pra-hot' : '';
         const teamTag = scoreFilter === 'ALL'
-          ? `<span style="font-size:10px;color:var(--muted)"> · ${p.Team||''}</span>` : '';
-        return `<div class="player-row" data-action="view-player" data-team="${p.Team||''}" data-player="${(p.Player||'').replace(/"/g,'')}" style="cursor:pointer">
+          ? `<span style="font-size:10px;color:var(--muted)"> · ${esc(p.Team||'')}</span>` : '';
+        return `<div class="player-row" data-action="view-player" data-team="${attr(p.Team||'')}" data-player="${attr(p.Player||'')}" style="cursor:pointer">
           <div class="player-info" style="pointer-events:none">
-            <div class="player-name">${p.Player||''}${teamTag}</div>
-            <div class="player-school">${schoolTag(p.School||'')} ${p.Conference||''}</div>
+            <div class="player-name">${esc(p.Player||'')}${teamTag}</div>
+            <div class="player-school">${schoolTag(p.School||'')} ${esc(p.Conference||'')}</div>
           </div>
-          <span class="player-status ${sCls}" style="pointer-events:none">${status}</span>
+          <span class="player-status ${sCls}" style="pointer-events:none">${esc(status)}</span>
           <div class="pra-block" style="pointer-events:none">
             ${isDNP ? '<div class="pra-big" style="font-size:22px;color:var(--red)">DNP</div>'
                     : '<div class="pra-big ' + praCls + '">' + (pra||'–') + '</div>' +
-                      (pra>0?'<div class="pra-breakdown">' + (Number(p.Points)||0) + 'p ' + (Number(p.Rebounds)||0) + 'r ' + (Number(p.Assists)||0) + 'a</div>':'')}
+                      (pra>0?'<div class="pra-breakdown">' + num(p.Points) + 'p ' + num(p.Rebounds) + 'r ' + num(p.Assists) + 'a</div>':'')}
           </div>
         </div>`;
       }).join('');
@@ -1408,17 +1521,17 @@ function renderScoreboard(errors) {
       cards += `<div class="game-card fade-in">
         <div class="game-card-header">
           <div class="game-matchup">${schoolTag(g.away||'')} <span style="font-size:10px;color:var(--muted);font-weight:400">vs</span> ${schoolTag(g.home||'')}</div>
-          ${venue ? `<div style="font-size:10px;color:var(--muted);margin-top:4px;font-family:var(--font-mono);letter-spacing:0.2px">${venue}</div>` : ''}
+          ${venue ? `<div style="font-size:10px;color:var(--muted);margin-top:4px;font-family:var(--font-mono);letter-spacing:0.2px">${esc(venue)}</div>` : ''}
         </div>
         ${playerRows}</div>`;
     });
   }
 
-  const errBanner = (errors && errors.length) ? `<div class="error-banner">⚠ ${errors.join(' · ')}</div>` : '';
+  const errBanner = errorBannerHTML(errors);
   const bar = (filtered.length && scoreFilter !== 'ALL') ? `<div class="totals-bar">
-    <div><div class="totals-label">${scoreFilter.toUpperCase()}</div>
+    <div><div class="totals-label">${esc(scoreFilter.toUpperCase())}</div>
          <div class="totals-sub">${starterRows.length} starters · ${playedCnt} played</div></div>
-    <div style="text-align:right"><div class="totals-val">${todayPRA.toLocaleString()}</div><div class="totals-sub">Starter PRA</div></div>
+    <div style="text-align:right"><div class="totals-val">${fmtInt(todayPRA)}</div><div class="totals-sub">Starter PRA</div></div>
   </div>` : '';
 
   setApp(`<div class="fade-in">${errBanner}<div class="team-selector">${chips}</div>${bar}${cards}</div>`);
@@ -1428,19 +1541,24 @@ function renderScoreboard(errors) {
 function renderStandings() {
   navStack = [];
   if (!standings) { setApp(loadingHTML()); return; }
+  if (!standings.length) {
+    setApp(emptyStateHTML('Standings', 'Standings unavailable', 'No standings data was loaded.', 'Retry data load', 'retry-init'));
+    return;
+  }
   const rows = standings.map((r, i) => {
     const isMe = r.Team === myTeam;
-    return `<div class="standings-row ${isMe?'is-me':''}" data-action="view-team" data-team="${r.Team}">
+    return `<div class="standings-row ${isMe?'is-me':''}" data-action="view-team" data-team="${attr(r.Team)}">
       <div class="rank ${i<3?'top3':''}">${r.Rank}</div>
-      <div class="standing-name">${r.Team}${isMe?' <span style="color:var(--accent)">★</span>':''}</div>
+      <div class="standing-name">${esc(r.Team)}${isMe?' <span style="color:var(--accent)">★</span>':''}</div>
       <div style="text-align:right;pointer-events:none">
-        <div class="standing-total">${Number(r.TotalPRA||0).toLocaleString()}</div>
-        ${r.PRABehind ? `<div class="standing-behind">–${Number(r.PRABehind).toLocaleString()}</div>`
+        <div class="standing-total">${fmtInt(r.TotalPRA)}</div>
+        ${r.PRABehind ? `<div class="standing-behind">–${fmtInt(r.PRABehind)}</div>`
                       : `<div class="standing-leader">LEADER</div>`}
       </div>
     </div>`;
   }).join('');
   setApp(`<div class="fade-in">
+    ${errorBannerHTML(loadErrors)}
     <div class="section-header"><div class="section-title">STANDINGS</div><div class="badge">Final · tap for roster</div></div>
     ${rows}
     <div class="data-note">PRA = Points + Rebounds + Assists · Starter games only</div>
@@ -1448,48 +1566,92 @@ function renderStandings() {
 }
 
 // ─── TEAM ROSTER ───────────────────────────────────────────────────────────────
-function viewTeam(team) {
-  pushNav(() => renderStandings());
-  pushNav(() => viewTeam(team));
+function rosterRowsForTeam(team) {
+  return indexes.playersByTeam.get(team) || [];
+}
 
-  const rows = (playerStats||[])
-    .filter(r => r.Team === team)
-    .sort((a,b) => (Number(b.TotalPRA)||0)-(Number(a.TotalPRA)||0));
+function rosterCardsHTML(team, rows) {
+  if (!rows.length) {
+    return emptyStateHTML('Roster', 'No players found', `No roster rows were loaded for <strong>${esc(team)}</strong>.`);
+  }
 
-  const standingsRow = (standings||[]).find(s => s.Team === team);
-  const totalPRA     = standingsRow ? Number(standingsRow.TotalPRA) : 0;
-  const totalGP      = rows.filter(r => r.RosterStatus==='Starter')
-                           .reduce((s,r) => s+(Number(r.GPplusDNP)||0), 0);
-  const isMe = team === myTeam;
-
-  const cards = rows.map(r => {
+  return rows.map(r => {
     const sCls = r.RosterStatus==='Starter'?'status-starter':r.RosterStatus==='Bench'?'status-bench':'status-inactive';
-    return `<div class="stats-card" data-action="view-player" data-team="${team}" data-player="${r.Player}">
+    return `<div class="stats-card" data-action="view-player" data-team="${attr(team)}" data-player="${attr(r.Player)}">
       <div class="stat-player-info">
-        <div class="stat-player-name">${r.Player}</div>
-        <div class="stat-player-meta">${schoolTag(r.School||'')} ${r.Conference||''}
-          <span class="player-status ${sCls}" style="padding:1px 6px;font-size:9px;margin-left:4px">${r.RosterStatus||''}</span>
+        <div class="stat-player-name">${esc(r.Player)}</div>
+        <div class="stat-player-meta">${schoolTag(r.School||'')} ${esc(r.Conference||'')}
+          <span class="player-status ${sCls}" style="padding:1px 6px;font-size:9px;margin-left:4px">${esc(r.RosterStatus||'')}</span>
         </div>
         <div class="tap-hint">tap for game log</div>
       </div>
       <div class="stat-nums">
-        <div class="stat-col"><div class="stat-val" style="color:var(--accent)">${Number(r.TotalPRA||0).toLocaleString()}</div><div class="stat-key">PRA</div></div>
-        <div class="stat-col"><div class="stat-val">${(Number(r.PRAG)||0).toFixed(1)}</div><div class="stat-key">PRA/G</div></div>
-        <div class="stat-col"><div class="stat-val">${Number(r.GPplusDNP)||0}</div><div class="stat-key">GP</div></div>
+        <div class="stat-col"><div class="stat-val" style="color:var(--accent)">${fmtInt(r.TotalPRA)}</div><div class="stat-key">PRA</div></div>
+        <div class="stat-col"><div class="stat-val">${num(r.PRAG).toFixed(1)}</div><div class="stat-key">PRA/G</div></div>
+        <div class="stat-col"><div class="stat-val">${num(r.GPplusDNP)}</div><div class="stat-key">GP</div></div>
       </div>
     </div>`;
   }).join('');
+}
+
+function rosterSummaryHTML(team, rows) {
+  const standingsRow = indexes.standingsByTeam.get(team);
+  const totalPRA     = standingsRow ? num(standingsRow.TotalPRA) : rows.reduce((s,r) => s + num(r.TotalPRA), 0);
+  const totalGP      = rows.filter(r => r.RosterStatus==='Starter')
+                           .reduce((s,r) => s+num(r.GPplusDNP), 0);
+  return `<div class="totals-bar">
+    <div><div class="totals-label">Season Total</div>
+         <div class="totals-sub">${totalGP} starter games (incl. DNPs)</div></div>
+    <div style="text-align:right"><div class="totals-val">${fmtInt(totalPRA)}</div>
+         <div class="totals-sub">Starter PRA</div></div>
+  </div>`;
+}
+
+function renderRoster() {
+  navStack = [];
+  if (!playerStats) { setApp(loadingHTML()); return; }
+  if (!allSickos.length) {
+    setApp(emptyStateHTML('Roster', 'No teams loaded', 'Roster data depends on standings and player stats.', 'Retry data load', 'retry-init'));
+    return;
+  }
+
+  const selectedTeam = allSickos.includes(rosterTeamFilter) ? rosterTeamFilter
+                     : allSickos.includes(myTeam)           ? myTeam
+                     : allSickos[0];
+  rosterTeamFilter = selectedTeam;
+  const rows = rosterRowsForTeam(selectedTeam);
+  const isMe = selectedTeam === myTeam;
+  const teamOpts = allSickos.map(t =>
+    `<option value="${attr(t)}" ${selectedTeam===t?'selected':''}>${esc(t)}${t===myTeam?' ★':''}</option>`
+  ).join('');
+
+  setApp(`<div class="fade-in">
+    ${errorBannerHTML(loadErrors)}
+    <div class="section-header">
+      <div class="section-title">ROSTER</div>
+      <div class="badge">${isMe ? 'My Team' : esc(selectedTeam)}</div>
+    </div>
+    <div class="seg-control" style="margin-bottom:12px;position:relative">
+      <select class="filter-select" id="roster-team-select" style="width:100%;padding-right:24px">${teamOpts}</select>
+      <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--muted);font-size:10px">▾</span>
+    </div>
+    ${rosterSummaryHTML(selectedTeam, rows)}
+    ${rosterCardsHTML(selectedTeam, rows)}
+  </div>`);
+}
+
+function viewTeam(team) {
+  pushNav(() => renderStandings());
+  pushNav(() => viewTeam(team));
+
+  const rows = rosterRowsForTeam(team);
+  const isMe = team === myTeam;
 
   setApp(`<div class="fade-in">
     <button class="back-btn" data-action="back">← Standings</button>
-    <div class="section-header"><div class="section-title">${team}${isMe?' ★':''}</div></div>
-    <div class="totals-bar">
-      <div><div class="totals-label">Season Total</div>
-           <div class="totals-sub">${totalGP} starter games (incl. DNPs)</div></div>
-      <div style="text-align:right"><div class="totals-val">${totalPRA.toLocaleString()}</div>
-           <div class="totals-sub">Starter PRA</div></div>
-    </div>
-    ${cards}
+    <div class="section-header"><div class="section-title">${esc(team)}${isMe?' ★':''}</div></div>
+    ${rosterSummaryHTML(team, rows)}
+    ${rosterCardsHTML(team, rows)}
   </div>`);
 }
 
@@ -1518,9 +1680,7 @@ function viewPlayerLog(team, playerArg) {
     ? (faRawLogs[aggKey] || faRawLogs[player] || []).sort((a,b) => (a._ymd||'').localeCompare(b._ymd||''))
     : isAllGamesLog
       ? (allSeasonRawLogs[aggKey] || []).sort((a,b) => (a._ymd||'').localeCompare(b._ymd||''))
-      : (gameLog||[])
-          .filter(r => r.Team === team && r.Player === player)
-          .sort((a,b) => a._ymd.localeCompare(b._ymd));
+      : (indexes.playerLogsByTeamPlayer.get(teamPlayerKey(team, player)) || []);
 
   const totalPRA = (isFA || isAllGamesLog)
     ? logs.reduce((s,r) => s+(Number(r.PRA)||0), 0)
@@ -1543,8 +1703,8 @@ function viewPlayerLog(team, playerArg) {
       <div class="gl-mid">
         <div class="gl-opp">${schoolTag(r.Opponent||'')}</div>
         <div class="gl-meta">
-          ${showBadge?`<span class="player-status ${sCls}" style="padding:1px 5px;font-size:9px">${status}</span>`:''}
-          ${!isDNP?`<span class="gl-breakdown">${Number(r.Minutes)||0}m · ${Number(r.Points)||0}p ${Number(r.Rebounds)||0}r ${Number(r.Assists)||0}a</span>`:''}
+          ${showBadge?`<span class="player-status ${sCls}" style="padding:1px 5px;font-size:9px">${esc(status)}</span>`:''}
+          ${!isDNP?`<span class="gl-breakdown">${num(r.Minutes)}m · ${num(r.Points)}p ${num(r.Rebounds)}r ${num(r.Assists)}a</span>`:''}
         </div>
       </div>
       <div class="gl-pra ${praCls}">${isDNP?'<span style="font-size:18px;color:var(--red)">DNP</span>':(pra||'–')}</div>
@@ -1555,25 +1715,25 @@ function viewPlayerLog(team, playerArg) {
     <button class="back-btn" data-action="back">← Back</button>
     <div class="section-header">
       <div style="flex:1;min-width:0">
-        <div style="font-size:16px;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${player}</div>
+        <div style="font-size:16px;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(player)}</div>
         <div style="font-size:12px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           ${(()=>{
             if (isFA) {
               const fa = aggKey
                 ? freeAgents.find(r => r.AggKey === aggKey)
                 : freeAgents.find(r => r.Player === player);
-              return fa ? `${schoolTag(fa.School||'')} <span>${fa.Conference||''}</span>` : '';
+              return fa ? `${schoolTag(fa.School||'')} <span>${esc(fa.Conference||'')}</span>` : '';
             }
             const ps = (playerStats||[]).find(r=>r.Player===player&&r.Team===team);
-            return ps ? `${schoolTag(ps.School||'')} <span>${ps.Conference||''}</span>` : '';
+            return ps ? `${schoolTag(ps.School||'')} <span>${esc(ps.Conference||'')}</span>` : '';
           })()}
         </div>
       </div>
     </div>
     <div class="totals-bar">
-      <div><div class="totals-label">${isFA ? 'Free Agent' : isAllGamesLog ? 'All Games' : team}</div>
+      <div><div class="totals-label">${esc(isFA ? 'Free Agent' : isAllGamesLog ? 'All Games' : team)}</div>
            <div class="totals-sub">${gp} games played · ${logs.length} total</div></div>
-      <div style="text-align:right"><div class="totals-val">${totalPRA.toLocaleString()}</div>
+      <div style="text-align:right"><div class="totals-val">${fmtInt(totalPRA)}</div>
            <div class="totals-sub">${(isFA || isAllGamesLog) ? 'Total PRA' : 'Starter PRA'}</div></div>
     </div>
     <div class="game-card">${rows||'<div class="empty-state"><p>No games found</p></div>'}</div>
@@ -1626,12 +1786,12 @@ function renderStats() {
   });
   const teamChoices = ['ALL', ...(faLoaded ? ['Free Agent'] : []), ...sortedSickos];
   const teamOpts = teamChoices.map(t =>
-    `<option value="${t}" ${statTeamFilter===t?'selected':''}>${t==='ALL'?'All Teams':t}</option>`).join('');
+    `<option value="${attr(t)}" ${statTeamFilter===t?'selected':''}>${esc(t==='ALL'?'All Teams':t)}</option>`).join('');
 
   // Conference list from all visible players
   const confs = ['ALL', ...Array.from(new Set(allPlayers.map(r=>r.Conference||'').filter(Boolean))).sort()];
   const confOpts = confs.map(c =>
-    `<option value="${c}" ${statConfFilter===c?'selected':''}>${c==='ALL'?'All Conferences':c}</option>`).join('');
+    `<option value="${attr(c)}" ${statConfFilter===c?'selected':''}>${esc(c==='ALL'?'All Conferences':c)}</option>`).join('');
 
   let rows = statTeamFilter==='ALL' ? [...allPlayers] : allPlayers.filter(r => r.Team===statTeamFilter);
   if (statConfFilter !== 'ALL') rows = rows.filter(r => r.Conference === statConfFilter);
@@ -1656,26 +1816,26 @@ function renderStats() {
     const statusLabel = isFA ? 'Free Agent' : (r.RosterStatus||'');
     const teamLine    = isFA
       ? `<span class="fa-badge">Free Agent</span>`
-      : `<span style="font-weight:700;color:var(--text)">${r.Team}</span> · ${draftLabel(r.DraftRound)}`;
+      : `<span style="font-weight:700;color:var(--text)">${esc(r.Team)}</span> · ${esc(draftLabel(r.DraftRound))}`;
 
     const cols = isTotals
-      ? `<div class="stat-col"><div class="stat-val" style="color:var(--accent)">${Number(r.TotalPRA||0).toLocaleString()}</div><div class="stat-key">PRA</div></div>
-         <div class="stat-col"><div class="stat-val sm">${Number(r.Points||0).toLocaleString()}</div><div class="stat-key">PTS</div></div>
-         <div class="stat-col"><div class="stat-val sm">${Number(r.Rebounds||0).toLocaleString()}</div><div class="stat-key">REB</div></div>
-         <div class="stat-col"><div class="stat-val sm">${Number(r.Assists||0).toLocaleString()}</div><div class="stat-key">AST</div></div>`
-      : `<div class="stat-col"><div class="stat-val" style="color:var(--accent)">${(Number(r.PRAG)||0).toFixed(1)}</div><div class="stat-key">PRA/G</div></div>
-         <div class="stat-col"><div class="stat-val sm">${(Number(r.PPG)||0).toFixed(1)}</div><div class="stat-key">PPG</div></div>
-         <div class="stat-col"><div class="stat-val sm">${(Number(r.RPG)||0).toFixed(1)}</div><div class="stat-key">RPG</div></div>
-         <div class="stat-col"><div class="stat-val sm">${(Number(r.APG)||0).toFixed(1)}</div><div class="stat-key">APG</div></div>`;
+      ? `<div class="stat-col"><div class="stat-val" style="color:var(--accent)">${fmtInt(r.TotalPRA)}</div><div class="stat-key">PRA</div></div>
+         <div class="stat-col"><div class="stat-val sm">${fmtInt(r.Points)}</div><div class="stat-key">PTS</div></div>
+         <div class="stat-col"><div class="stat-val sm">${fmtInt(r.Rebounds)}</div><div class="stat-key">REB</div></div>
+         <div class="stat-col"><div class="stat-val sm">${fmtInt(r.Assists)}</div><div class="stat-key">AST</div></div>`
+      : `<div class="stat-col"><div class="stat-val" style="color:var(--accent)">${num(r.PRAG).toFixed(1)}</div><div class="stat-key">PRA/G</div></div>
+         <div class="stat-col"><div class="stat-val sm">${num(r.PPG).toFixed(1)}</div><div class="stat-key">PPG</div></div>
+         <div class="stat-col"><div class="stat-val sm">${num(r.RPG).toFixed(1)}</div><div class="stat-key">RPG</div></div>
+         <div class="stat-col"><div class="stat-val sm">${num(r.APG).toFixed(1)}</div><div class="stat-key">APG</div></div>`;
 
     const dataPlayer = isFA ? 'fa:' + (r.AggKey||r.Player)
                      : (statsScope === 'all' && faLoaded && r.AggKey) ? 'all:' + r.AggKey
                      : r.Player;
-    return `<div class="stats-card ${isMe?'is-my-player':''} ${isFA?'is-fa':''}" data-action="view-player" data-team="${r.Team}" data-player="${dataPlayer}">
+    return `<div class="stats-card ${isMe?'is-my-player':''} ${isFA?'is-fa':''}" data-action="view-player" data-team="${attr(r.Team)}" data-player="${attr(dataPlayer)}">
       <div class="stat-player-info">
-        <div class="stat-player-name">${r.Player}</div>
-        <div class="stat-player-meta">${schoolTag(r.School||'')} ${r.Conference||''}
-          ${!isFA ? '<span class="player-status ' + sCls + '" style="padding:1px 5px;font-size:9px;margin-left:4px">' + statusLabel + '</span>' : ''}
+        <div class="stat-player-name">${esc(r.Player)}</div>
+        <div class="stat-player-meta">${schoolTag(r.School||'')} ${esc(r.Conference||'')}
+          ${!isFA ? '<span class="player-status ' + sCls + '" style="padding:1px 5px;font-size:9px;margin-left:4px">' + esc(statusLabel) + '</span>' : ''}
         </div>
         <div class="stat-player-meta" style="margin-top:2px">${teamLine}</div>
       </div>
@@ -1691,10 +1851,10 @@ function renderStats() {
     : 0;
   const faToggleLabel = faLoading ? (faLoadingSource === 'all games' ? 'Loading all games…' : 'Loading free agents…')
                       : !faEnabled ? 'Show free agents'
-                      : faLoaded   ? `Free agents (${faConfCount.toLocaleString()} above ${FA_MIN_PRAG} PRA/G)`
+                      : faLoaded   ? `Free agents (${fmtInt(faConfCount)} above ${FA_MIN_PRAG} PRA/G)`
                       :              'Show free agents';
   const faToggle = `<div class="fa-toggle-row">
-    <span class="fa-toggle-label ${faEnabled?'active':''}">${faToggleLabel}</span>
+    <span class="fa-toggle-label ${faEnabled?'active':''}">${esc(faToggleLabel)}</span>
     <label class="toggle-switch" data-action="toggle-fa">
       <input type="checkbox" ${faEnabled?'checked':''} style="pointer-events:none">
       <div class="toggle-track"></div>
@@ -1706,10 +1866,11 @@ function renderStats() {
   const pergameSorts = [['prag','PRA/G'],['ppg','PPG'],['rpg','RPG'],['apg','APG']];
   const sorts = isTotals ? totalSorts : pergameSorts;
   const sortBtns = sorts.map(([s,label]) =>
-    `<button class="sort-btn ${statSort===s?'active':''}" data-action="set-stat-sort" data-sort="${s}">${label}</button>`
+    `<button class="sort-btn ${statSort===s?'active':''}" data-action="set-stat-sort" data-sort="${attr(s)}">${esc(label)}</button>`
   ).join('');
 
   setApp(`<div class="fade-in">
+    ${errorBannerHTML(loadErrors)}
     <div class="section-header">
       <div class="section-title">PLAYER STATS</div>
       <div class="seg-control" style="margin-bottom:0;width:238px;padding:2px;flex-shrink:0">
@@ -1736,7 +1897,7 @@ function renderStats() {
       <span class="filter-label">Sort:</span>
       ${sortBtns}
     </div>
-    ${cards}
+    ${cards || emptyStateHTML('Stats', 'No players match', 'Try a different team, conference, or stats view.')}
     ${rows.length>limit?`<div class="data-note">Showing top ${limit} · filter by team or conference to see more</div>`:''}
   </div>`);
 }
@@ -1748,8 +1909,8 @@ function openTeamModal() {
       const sel = (myTeam===t)||(myTeam===null&&t==='(None)');
       const textColor = darkMode ? '#f0e0c0' : '#2a1c08';
       const bgColor   = darkMode ? '#342812'  : '#e8c98e';
-      return `<div class="modal-option ${sel?'selected':''}" data-action="select-my-team" data-team="${t}" style="color:${textColor};background:${bgColor}">
-        <span style="pointer-events:none;color:${textColor} !important;font-size:14px;font-weight:700;display:block;flex:1">${t}</span>
+      return `<div class="modal-option ${sel?'selected':''}" data-action="select-my-team" data-team="${attr(t)}" style="color:${attr(textColor)};background:${attr(bgColor)}">
+        <span style="pointer-events:none;color:${attr(textColor)} !important;font-size:14px;font-weight:700;display:block;flex:1">${esc(t)}</span>
         ${sel?`<span style="pointer-events:none;color:#c45508 !important;font-size:16px;flex-shrink:0">✓</span>`:''}
       </div>`;
     }).join('');
@@ -1760,6 +1921,7 @@ function selectMyTeam(t) {
   myTeam = t==='(None)' ? null : t;
   myTeam ? localStorage.setItem('sickos_team',myTeam) : localStorage.removeItem('sickos_team');
   document.getElementById('team-modal').style.display = 'none';
+  rosterTeamFilter = myTeam || rosterTeamFilter;
   scoreFilter = myTeam||'ALL';
   updateHeaderTeam();
   renderCurrentTab();
@@ -1785,9 +1947,9 @@ function renderDraft() {
   // Build conference list from draft data
   const draftConfs = ['ALL', ...Array.from(new Set(draftData.map(p=>p.conf).filter(Boolean))).sort()];
   const teamOpts = ['ALL',...allSickos].map(t =>
-    `<option value="${t}" ${draftTeamFilter===t?'selected':''}>${t==='ALL'?'All Teams':t}</option>`).join('');
+    `<option value="${attr(t)}" ${draftTeamFilter===t?'selected':''}>${esc(t==='ALL'?'All Teams':t)}</option>`).join('');
   const confOpts = draftConfs.map(c =>
-    `<option value="${c}" ${draftConfFilter===c?'selected':''}>${c==='ALL'?'All Conferences':c}</option>`).join('');
+    `<option value="${attr(c)}" ${draftConfFilter===c?'selected':''}>${esc(c==='ALL'?'All Conferences':c)}</option>`).join('');
 
   // Apply filters
   let filtered = [...draftData];
@@ -1795,9 +1957,7 @@ function renderDraft() {
   if (draftConfFilter !== 'ALL') filtered = filtered.filter(p => p.conf === draftConfFilter);
 
   // Round order - preserve original
-  const roundOrder = [];
-  const seenR = new Set();
-  draftData.forEach(p => { if (!seenR.has(p.round)) { seenR.add(p.round); roundOrder.push(p.round); } });
+  const roundOrder = indexes.draftRoundOrder;
 
   // Group filtered picks by round
   const byRound = {};
@@ -1808,7 +1968,7 @@ function renderDraft() {
   const jumpBtns = `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:14px">
     ${allRoundNums.map(r => {
       const disp = suppDisplayMap[r] || r;
-      return '<button class="sort-btn" style="padding:4px 9px;font-size:11px;min-width:0" data-action="jump-round" data-round="' + r + '">' + disp + '</button>';
+      return '<button class="sort-btn" style="padding:4px 9px;font-size:11px;min-width:0" data-action="jump-round" data-round="' + attr(r) + '">' + esc(disp) + '</button>';
     }).join('')}
   </div>`;
 
@@ -1819,31 +1979,32 @@ function renderDraft() {
     picks.sort((a,b) => (Number(a.pick)||0) - (Number(b.pick)||0));
     const isSupp = suppRoundNums.includes(round);
     const label  = isSupp ? `${suppDisplayMap[round]} Supplemental Draft` : `Round ${round}`;
-    const total  = draftData.filter(p=>p.round===round).length;
+    const total  = indexes.draftCountsByRound.get(round) || 0;
     const badge  = picks.length < total ? `${picks.length} of ${total}` : `${total} picks`;
 
     const rows = picks.map(p => {
       const isMe   = p.team === myTeam;
       const isPass = !p.player;
-      return `<div class="draft-row" ${isPass ? '' : 'data-action="view-player" data-team="' + p.team + '" data-player="' + p.player.replace(/"/g,'') + '" style="cursor:pointer"'}>
-        <div class="draft-pick-num" style="pointer-events:none">#${p.overall}</div>
+      return `<div class="draft-row" ${isPass ? '' : 'data-action="view-player" data-team="' + attr(p.team) + '" data-player="' + attr(p.player) + '" style="cursor:pointer"'}>
+        <div class="draft-pick-num" style="pointer-events:none">#${esc(p.overall)}</div>
         <div class="draft-player-info" style="pointer-events:none">
           ${isPass ? '<div class="draft-player-name draft-pass">— pass —</div>'
-                   : '<div class="draft-player-name">' + p.player + '</div>'}
+                   : '<div class="draft-player-name">' + esc(p.player) + '</div>'}
           <div class="draft-player-meta">
-            ${isPass ? '' : schoolTag(p.school) + ' <span>' + (p.conf||'') + '</span>'}
+            ${isPass ? '' : schoolTag(p.school) + ' <span>' + esc(p.conf||'') + '</span>'}
           </div>
         </div>
-        <div class="draft-team ${isMe?'is-me':''}" style="pointer-events:none">${p.team}</div>
+        <div class="draft-team ${isMe?'is-me':''}" style="pointer-events:none">${esc(p.team)}</div>
       </div>`;
     }).join('');
 
-    return `<div id="draft-round-${round}" class="draft-section-header" style="display:flex;align-items:center;justify-content:space-between">
-      <span>${label}</span><span style="font-size:10px">${badge}</span>
+    return `<div id="draft-round-${attr(round)}" class="draft-section-header" style="display:flex;align-items:center;justify-content:space-between">
+      <span>${esc(label)}</span><span style="font-size:10px">${esc(badge)}</span>
     </div>${rows}`;
   }).filter(Boolean).join('');
 
   setApp(`<div class="fade-in">
+    ${errorBannerHTML(loadErrors)}
     <div class="section-header">
       <div class="section-title">Draft Board</div>
       <div class="badge">${filtered.filter(p=>p.player).length} picks</div>
@@ -1859,7 +2020,7 @@ function renderDraft() {
       </div>
     </div>
     ${jumpBtns}
-    ${sections || '<div class="empty-state"><div class="emoji">🏀</div><p>No picks match your filters.</p></div>'}
+    ${sections || emptyStateHTML('Draft', 'No picks match', 'Try a different team or conference filter.')}
   </div>`);
 }
 
@@ -1869,13 +2030,12 @@ function renderTransactions() {
   if (!txnData) { setApp(loadingHTML()); return; }
 
   const teamOpts = ['ALL',...allSickos].map(t =>
-    `<option value="${t}" ${txnTeamFilter===t?'selected':''}>${t==='ALL'?'All Teams':t}</option>`).join('');
+    `<option value="${attr(t)}" ${txnTeamFilter===t?'selected':''}>${esc(t==='ALL'?'All Teams':t)}</option>`).join('');
   const typeOpts = [
     ['ANY','All Moves'],['Roster Move','Roster Moves'],['Lineup Change','Lineup Changes']
-  ].map(([v,l]) => `<option value="${v}" ${txnTypeFilter===v?'selected':''}>${l}</option>`).join('');
+  ].map(([v,l]) => `<option value="${attr(v)}" ${txnTypeFilter===v?'selected':''}>${esc(l)}</option>`).join('');
 
-  let rows = [...txnData];
-  if (txnTeamFilter !== 'ALL') rows = rows.filter(r => r.team === txnTeamFilter);
+  let rows = txnTeamFilter === 'ALL' ? [...txnData] : [...(indexes.transactionsByTeam.get(txnTeamFilter) || [])];
   if (txnTypeFilter !== 'ANY') rows = rows.filter(r => r.type === txnTypeFilter);
 
   const txnBadgeClass = t =>
@@ -1885,21 +2045,22 @@ function renderTransactions() {
 
   const cards = rows.slice(0,150).map(r => {
     const isMe = r.team === myTeam;
-    return `<div class="txn-row" data-action="view-player" data-team="${r.team}" data-player="${r.player.replace(/"/g,'')}" style="cursor:pointer">
+    return `<div class="txn-row" data-action="view-player" data-team="${attr(r.team)}" data-player="${attr(r.player)}" style="cursor:pointer">
       <div class="txn-date" style="pointer-events:none">${fmtDate(r.date)}</div>
       <div class="txn-info" style="pointer-events:none">
-        <div class="txn-player">${r.player}</div>
-        <div class="txn-meta">${schoolTag(r.school)} <span>${r.conf||''}</span></div>
+        <div class="txn-player">${esc(r.player)}</div>
+        <div class="txn-meta">${schoolTag(r.school)} <span>${esc(r.conf||'')}</span></div>
       </div>
-      <span class="txn-badge ${txnBadgeClass(r.txn)}" style="pointer-events:none">${r.txn}</span>
-      <div class="txn-team ${isMe?'is-me':''}" style="pointer-events:none">${r.team}</div>
+      <span class="txn-badge ${txnBadgeClass(r.txn)}" style="pointer-events:none">${esc(r.txn)}</span>
+      <div class="txn-team ${isMe?'is-me':''}" style="pointer-events:none">${esc(r.team)}</div>
     </div>`;
   }).join('');
 
   setApp(`<div class="fade-in">
+    ${errorBannerHTML(loadErrors)}
     <div class="section-header">
       <div class="section-title">Transactions</div>
-      <div class="badge">${rows.length} moves</div>
+      <div class="badge">${fmtInt(rows.length)} moves</div>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:12px">
       <div class="seg-control" style="flex:1;margin-bottom:0;position:relative">
@@ -1911,7 +2072,7 @@ function renderTransactions() {
         <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--muted);font-size:10px">▾</span>
       </div>
     </div>
-    ${cards || '<div class="empty-state"><div class="emoji">📋</div><p>No transactions match your filters.</p></div>'}
+    ${cards || emptyStateHTML('Moves', 'No transactions match', 'Try a different team or move type filter.')}
     ${rows.length>150?'<div class="data-note">Showing most recent 150 · filter by team to see all</div>':''}
   </div>`);
 }
