@@ -1,4 +1,4 @@
-# Fantasy College Basketball Platform 
+# Fantasy College Basketball Platform
 
 A mobile-first application that transforms NCAA Division I men's basketball data into a fantasy basketball platform.
 
