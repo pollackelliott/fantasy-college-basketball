@@ -2,7 +2,7 @@
 
 A mobile-first application that transforms NCAA Division I men's basketball data into a fantasy basketball platform.
 
-The project demonstrates an end-to-end data pipeline, beginning with automated web scraping in **R**, continuing through data transformation and modeling in **Google Sheets**, and culminating in an interactive JavaScript application deployed on **Github Pages**.
+The project demonstrates an end-to-end data pipeline, beginning with automated web scraping in **R**, continuing through data transformation and modeling using **Google Sheets and SQL-like Query Language**, and culminating in an interactive JavaScript application deployed on **Github Pages**.
 
 The application provides league participants with real-time standings, player analytics, draft history, transaction tracking, roster management, and daily scoring.
 
@@ -16,6 +16,9 @@ The application provides league participants with real-time standings, player an
 - R
 - Web Scraping
 - Google Sheets
+- Google Sheets Query Language (SQL-like)
+- Data Modeling
+- ETL
 
 **Application Development**
 - JavaScript
@@ -103,13 +106,14 @@ GitHub Pages Deployment
 
 ## Data Engineering Concepts Demonstrated
 
-- Automated web scraping
+- Automated web scraping using R
 - ETL pipeline design
-- Data cleaning
-- Data transformation
-- Data modeling
-- Relational thinking across multiple datasets
-- Client-side aggregation
+- Data cleaning and normalization
+- SQL-like querying with Google Sheets Query language
+- Multi-table data modeling
+- Relational data integration
+- Client-side data transformation
+- Aggregation and ranking algorithms
 - Derived metric calculation
 - Analytics application development
 
