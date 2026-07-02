@@ -1,10 +1,29 @@
-# Fantasy College Basketball
+# Fantasy College Basketball Platform
 
-A mobile-first fantasy college basketball platform built around an automated data pipeline, interactive analytics, and modern web technologies.
+A mobile-first application that transforms NCAA Division I men's basketball data into a fantasy basketball platform.
 
-The application combines custom web scraping, data transformation, Google Sheets, and JavaScript to provide league participants with real-time standings, player analytics, draft history, transaction tracking, roster management, and daily scoring.
+The project demonstrates an end-to-end data pipeline, beginning with automated web scraping in **R**, continuing through data transformation and modeling in **Google Sheets**, and culminating in an interactive JavaScript application deployed on **Github Pages**.
+
+The application provides league participants with real-time standings, player analytics, draft history, transaction tracking, roster management, and daily scoring.
 
 **Live Demo:** https://pollackelliott.github.io/fantasy-college-basketball
+
+---
+
+## Technologies
+
+**Data Engineering**
+- R
+- Web Scraping
+- Google Sheets
+
+**Application Development**
+- JavaScript
+- HTML
+- CSS
+
+**Deployment**
+- Github Pages
 
 ---
 
